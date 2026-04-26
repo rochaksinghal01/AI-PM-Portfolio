@@ -1,0 +1,261 @@
+{
+  "name": "Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "You are a professional customer support assistant for Myntra, a leading fashion and lifestyle e-commerce platform. Your role is to help users with questions related to Myntra’s products, orders, returns, payments, delivery, and general shopping support.\n\n🔹 Tone & Brand Voice\n- Be friendly, clear, and respectful.\n- Avoid slang, emojis, and overly casual language.\n- Keep answers concise and easy to understand.\n\n🔹 Supported Topics\nYou may assist with:\n- Product information: availability, sizing, colors, fit, reviews\n- Order status: tracking, delays, delivery timelines\n- Returns & refunds: policies, eligibility, instructions\n- Exchange requests and order cancellations\n- Payment methods, offers, and discounts\n- App or website navigation help\n- Account basics: login issues, address changes (without requesting sensitive information)\n\n🔹 Out-of-Domain Queries\nIf the user asks questions unrelated to Myntra or e-commerce shopping — such as ride fares, banking, medical, travel, food delivery, insurance, or other services — respond politely with:\n\n“I’m here to assist with Myntra shopping and support. For questions about other services, please contact the relevant provider.”\n\nNever attempt to answer questions outside the Myntra shopping experience.\n\n🔹 Safety & Escalation\n- Do not request or handle personal information such as phone numbers, emails, payment info, or OTPs.\n- If the user reports issues like missing refunds, failed transactions, or safety concerns, say:\n“I recommend contacting Myntra customer care via the app for further assistance.”\n\n🔹 Grounded Responses (for RAG)\n- Only answer based on verified Myntra support documents or help center content when connected to a retrieval system.\n- If no relevant information is found, say:\n“I couldn’t find verified information on that. Please check with Myntra Support via the app.”\n\n📚 Knowledge Scope & Data Access\n\nOnly refer to the following data source:\nGoogle Document Name: Myntra Chatbot Database\n\n\nSheet 1: Order_Status_Data\n\n\nContains: order IDs, order status (confirmed, shipped, delivered, returned, canceled), tracking updates, delivery dates, refund status.\n\n\nSheet 2: Payment_Offers_Data\n\n\nContains: current bank offers, promo codes, discount eligibility criteria, UPI and wallet offers.\n\n\n\n\n🔹 Formatting\n- Use bullet points for steps, policies, and lists.\n- Use clear, simple language suitable for mobile and desktop users.\n\n🔹 Language\n- Respond in the language used by the user if supported; otherwise, default to English.\n\nOnly provide accurate, helpful, and compliant responses within this scope.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "fcc97d50-5bdb-4700-b8bb-9aeed4b18f22",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        144,
+        240
+      ],
+      "id": "5f96a45e-e889-43bc-8edd-a12799b6d7ad",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "uqUaCYIRe9kQPSAx",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Workflow\n\nProblem statement - To build a customer facing chatbot for users to use via Telegram and get all their order and payment related queries resolved\n\nCustomer interface - this is where we can accept customer inputs\nTelegram or inbuilt chat interface by n8n \nThen you need a system which can understand, what the query is \nIf it’s complete run the loop again to get more context\nLLM which can reason and guide the built in system to get the right information\nSystem which can look into the database or available information to respond to user queries\nIf the details are not available then respond accordingly \nWe would need a node which we can access for getting the information, API node, tools - where in you can upload your static or dynamic data\nThen you need another system to send that response\nAnother telegram or chat interface to give the response\n",
+        "height": 256,
+        "width": 336
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -496,
+        -16
+      ],
+      "typeVersion": 1,
+      "id": "acd18fda-9f24-4104-a866-ed7b887052cb",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.message.chat.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        448
+      ],
+      "id": "877c50b7-5ba0-4967-9874-0f7a814ac133",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1b9DCfe8ZRZJ74bXz7aU0UtqgIHjiBCMTz3WiY2d_Q6U",
+          "mode": "list",
+          "cachedResultName": "Copy of Myntra Chatbot Database",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1b9DCfe8ZRZJ74bXz7aU0UtqgIHjiBCMTz3WiY2d_Q6U/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1202296568,
+          "mode": "list",
+          "cachedResultName": "Order_Status_Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1b9DCfe8ZRZJ74bXz7aU0UtqgIHjiBCMTz3WiY2d_Q6U/edit#gid=1202296568"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        432,
+        256
+      ],
+      "id": "21b0d10e-efbe-44de-b7fc-83367f5bfbae",
+      "name": "Order",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "KDlyVL7rZQlgeMBh",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1b9DCfe8ZRZJ74bXz7aU0UtqgIHjiBCMTz3WiY2d_Q6U",
+          "mode": "list",
+          "cachedResultName": "Copy of Myntra Chatbot Database",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1b9DCfe8ZRZJ74bXz7aU0UtqgIHjiBCMTz3WiY2d_Q6U/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 31027283,
+          "mode": "list",
+          "cachedResultName": "Payment_Offers_Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1b9DCfe8ZRZJ74bXz7aU0UtqgIHjiBCMTz3WiY2d_Q6U/edit#gid=31027283"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        560,
+        272
+      ],
+      "id": "72fea649-401c-4a3f-899e-30357b8b5e9f",
+      "name": "Payment",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "KDlyVL7rZQlgeMBh",
+          "name": "Google Sheets OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -16,
+        -112
+      ],
+      "id": "7ad652a8-4611-48c6-b456-5e30adf32344",
+      "name": "Telegram Trigger",
+      "webhookId": "6324db0c-b045-4dc0-8989-7da9dd242622",
+      "credentials": {
+        "telegramApi": {
+          "id": "mK4iegD4F6H8g8pt",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        576,
+        0
+      ],
+      "id": "ebe63161-14be-46a7-b375-60313bab199a",
+      "name": "Send a text message",
+      "webhookId": "6fd49168-7795-45db-8616-6ff8f7420f30",
+      "credentials": {
+        "telegramApi": {
+          "id": "mK4iegD4F6H8g8pt",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
