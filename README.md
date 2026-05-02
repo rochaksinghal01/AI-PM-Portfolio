@@ -5,6 +5,13 @@ Bangalore, India · [LinkedIn](https://linkedin.com/in/rochak-singhal) · [Portf
 
 ---
 
+## 🌐 Live Portfolio
+
+> **[→ View Interactive Portfolio](https://repo-showcase-quest.lovable.app)**  
+> Built with Lovable · Hero · Projects · Experience · Skills — all in one place
+
+---
+
 ## About Me
 
 I'm an AI Product Manager with **3+ years of product management experience** and **9+ years of cross-functional leadership** across B2B SaaS, retail, and media. My work lives at the intersection of enterprise product thinking and applied AI — translating ambiguous, complex problems into scalable solutions that ship, get adopted, and move metrics.
