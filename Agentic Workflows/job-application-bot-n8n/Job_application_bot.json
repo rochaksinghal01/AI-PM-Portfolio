@@ -1,0 +1,294 @@
+{
+  "name": "Job application bot",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "394da3d2-19c6-42fe-bb81-2803296ff316",
+              "leftValue": "={{$json[\"job_link\"]}}",
+              "rightValue": "={{$json[\"job_link\"]}}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2624,
+        -656
+      ],
+      "id": "2df0a116-6599-4fe9-b152-c30bf448f5cc",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e174d231-8849-4395-8f13-d067806ae25e",
+              "name": "clean_jd",
+              "value": "={{$json[\"manual_jd\"]}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3648,
+        -480
+      ],
+      "id": "2a479497-4552-47b4-9b33-bbca49a93d9b",
+      "name": "Clean_JD"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "job-application",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*",
+          "rawBody": true,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET,POST,OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        1600,
+        -400
+      ],
+      "id": "46eb51f0-1be2-49aa-9c83-9f60afe1ba3c",
+      "name": "Webhook",
+      "webhookId": "27120d50-c65e-4629-a1f6-d6382658d5c0"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        3952,
+        -432
+      ],
+      "id": "233cb082-9003-421a-b66e-164bd17e7f4e",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "uqUaCYIRe9kQPSAx",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        4304,
+        -432
+      ],
+      "id": "d82364d2-2f83-4f47-a2a3-5f4b1ee3c317",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "uqUaCYIRe9kQPSAx",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.stage }}",
+                    "rightValue": "start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "dc0271f7-eb0e-4a50-a66c-f588635bde0c"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "157e6e38-8cf9-48f5-bc69-cde4a37b7775",
+                    "leftValue": "={{ $json.body.stage }}",
+                    "rightValue": "approved",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1824,
+        -400
+      ],
+      "id": "b3e19055-f119-4ad9-ab8f-c29bd514342c",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "cv_file",
+        "options": {
+          "keepSource": "both"
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        2048,
+        -16
+      ],
+      "id": "50805948-f99c-4f71-b52f-a18eadf21b9c",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "useCustomSchema": true,
+        "tableId": "sessions",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "job_title",
+              "fieldValue": "={{ $json.job_title }}"
+            },
+            {
+              "fieldId": "optimized_resume",
+              "fieldValue": "={{ $json.optimized_resume }}"
+            },
+            {
+              "fieldId": "scores",
+              "fieldValue": "={{ $json.scores }}"
+            },
+            {
+              "fieldId": "insights",
+              "fieldValue": "={{ $json.insights }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3936,
+        -16
+      ],
+      "id": "2fc5d421-9cf4-48e6-b302-2871fdc9344d",
+      "name": "Create a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "zeGE8ZxV5NkcaVhf",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "pinData": {},
+  "triggerCount": 1,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
