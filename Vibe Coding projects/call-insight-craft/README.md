@@ -1,73 +1,70 @@
-# Welcome to your Lovable project
+# Call Insight Craft — AI Call Quality Evaluation Dashboard
 
-## Project info
+**Contact Centre QA Intelligence Platform · Built with Lovable**
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+🔗 [Live App](https://call-insight-craft.lovable.app)
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+![Call Insight Craft](./thumbnail.png)
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Overview
 
-Changes made via Lovable will be committed automatically to this repo.
+An AI-powered call quality evaluation dashboard for contact centres. QA managers and team leads can submit calls for evaluation, receive dimension-based quality scores, and surface performance patterns across their teams — replacing slow, manual call auditing with structured, automated insight.
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Problem Statement
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Contact centre QA teams spend hours manually listening to and scoring calls with no consistency across reviewers. Managers lack a single view of call quality trends, team-level patterns, and routing signals. A lightweight evaluation tool with clear scoring dimensions and analytics was missing from most mid-market QA stacks.
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## User Flow
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+Manager opens dashboard
+        │
+        ▼
+Submit call for evaluation
+  └── Upload or link call recording
+        │
+        ▼
+AI evaluates across quality dimensions
+  ├── Communication clarity
+  ├── Issue resolution
+  ├── Empathy & tone
+  ├── Process adherence
+  └── Customer satisfaction signal
+        │
+        ▼
+Dimension scores generated
+        │
+        ▼
+Dashboard view
+  ├── Call metrics overview
+  ├── Team performance trends
+  └── Routing recommendations
+        │
+        ▼
+Drill into individual call analytics
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Tech Stack
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+| Component | Technology |
+|---|---|
+| Frontend Framework | React 18 + TypeScript |
+| Build Tool | Vite |
+| UI Components | Radix UI + shadcn/ui |
+| Styling | Tailwind CSS |
+| Backend & Auth | Supabase |
+| Data Fetching | TanStack React Query |
+| Animations | Framer Motion |
+| Charts | Recharts |
+| Icons | Lucide React |
+| Platform | Lovable |

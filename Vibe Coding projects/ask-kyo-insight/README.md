@@ -1,73 +1,67 @@
-# Welcome to your Lovable project
+# Ask Kyo — AI Copilot for Customer Insight
 
-## Project info
+**Embedded CX Intelligence for Microsoft Teams & Gmail · Built with Lovable**
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+🔗 [Live App](https://ask-kyo-insight.lovable.app)
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+![Ask Kyo Insight](./thumbnail.png)
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Overview
 
-Changes made via Lovable will be committed automatically to this repo.
+Ask Kyo is an AI copilot that lives natively inside Microsoft Teams and Gmail, giving support, product, analytics, and marketing teams instant access to customer feedback intelligence without switching context. Teams can ask natural-language questions, get structured insight cards, and surface anomalies — all from within the tools they already use every day.
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Problem Statement
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Teams at Sentisum needed to query customer feedback and sentiment data without leaving their primary work tools. Switching to a separate analytics platform mid-workflow broke focus and slowed down decisions. The ask was to embed insight retrieval directly into Teams and Gmail so that answers were one question away, not one tab away.
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## User Flow
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+User is in Teams or Gmail
+        │
+        ▼
+Kyo appears as a floating assistant
+        │
+        ▼
+User triggers Kyo
+  ├── Teams: via chat companion, meeting mode, or huddle
+  └── Gmail: via sidebar panel
+        │
+        ▼
+Popup with team-specific question prompts
+  ├── Support: "What are the top complaints this week?"
+  ├── Product: "What features are users requesting?"
+  ├── Analytics: "Any anomalies in sentiment today?"
+  └── Marketing: "How is Campaign X landing with customers?"
+        │
+        ▼
+Kyo returns structured insight card
+  └── Summary · Evidence · Suggested next action
+        │
+        ▼
+User acts without leaving their workflow
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Tech Stack
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+| Component | Technology |
+|---|---|
+| Frontend Framework | React 18 + TypeScript |
+| Build Tool | Vite |
+| UI Components | Radix UI + shadcn/ui |
+| Styling | Tailwind CSS |
+| Form Handling | React Hook Form + Zod |
+| Data Fetching | TanStack React Query |
+| Notifications | Sonner |
+| Icons | Lucide React |
+| Platform | Lovable |

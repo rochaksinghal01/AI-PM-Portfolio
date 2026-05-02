@@ -1,73 +1,65 @@
-# Welcome to your Lovable project
+# Lenskart Frame Guide — In-Store Sales Assistant
 
-## Project info
+**Retail AI Companion for Lenskart Store Associates · Built with Lovable**
 
-**URL**: https://lovable.dev/projects/45b87d62-09b2-46d2-b7a9-7baa96a6a8ae
+🔗 [Live App](https://lenskart-frame-guide.lovable.app)
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+![Lenskart Frame Guide](./thumbnail.png)
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/45b87d62-09b2-46d2-b7a9-7baa96a6a8ae) and start prompting.
+## Overview
 
-Changes made via Lovable will be committed automatically to this repo.
+A mobile-first sales assistant designed for Lenskart retail staff to confidently pitch eyewear frames to customers on the shop floor. Associates get instant access to swipeable product cards covering five dimensions — styling, comfort, features, collection identity, and active offers — plus an integrated chatbot to handle any customer question in real time, without leaving the app.
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## Problem Statement
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+In-store associates at Lenskart often struggle to articulate the full value of premium frames under time pressure, leading to missed upsell opportunities and inconsistent customer experiences. There was no lightweight, phone-friendly tool that consolidated product knowledge, talking points, and live Q&A in one place.
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## User Flow
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+Associate opens app
+        │
+        ▼
+Product showcase loads
+        │
+        ▼
+Swipe through 5 card dimensions
+  ├── Styling & face shape compatibility
+  ├── Comfort & fit details
+  ├── Features & lens specs
+  ├── Collection identity & brand story
+  └── Active offers & pricing
+        │
+        ▼
+Customer asks a question
+        │
+        ├── Common questions rail (pre-loaded FAQs)
+        └── ChatBot popup (custom real-time Q&A)
+        │
+        ▼
+Associate answers confidently → closes the sale
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Tech Stack
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/45b87d62-09b2-46d2-b7a9-7baa96a6a8ae) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+| Component | Technology |
+|---|---|
+| Frontend Framework | React 18 + TypeScript |
+| Build Tool | Vite |
+| UI Components | Radix UI + shadcn/ui |
+| Styling | Tailwind CSS |
+| Form Handling | React Hook Form + Zod |
+| Data Fetching | TanStack React Query |
+| Notifications | Sonner |
+| Icons | Lucide React |
+| Platform | Lovable |
