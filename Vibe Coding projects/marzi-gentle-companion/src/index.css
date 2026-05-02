@@ -1,0 +1,247 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&display=swap');
+
+@layer base {
+  :root {
+    /* Warm, earthy Marzi palette */
+    --background: 40 33% 97%;
+    --foreground: 25 20% 20%;
+
+    --card: 40 30% 95%;
+    --card-foreground: 25 20% 20%;
+
+    --popover: 40 33% 97%;
+    --popover-foreground: 25 20% 20%;
+
+    /* Warm terracotta - primary brand */
+    --primary: 16 65% 55%;
+    --primary-foreground: 40 33% 97%;
+    --primary-muted: 16 45% 75%;
+
+    /* Sage green - calm secondary */
+    --secondary: 145 20% 45%;
+    --secondary-foreground: 40 33% 97%;
+    --secondary-muted: 145 15% 85%;
+
+    /* Muted cream for surfaces */
+    --muted: 40 25% 92%;
+    --muted-foreground: 25 15% 45%;
+
+    /* Gold accent for spirituality */
+    --accent: 42 55% 55%;
+    --accent-foreground: 25 20% 15%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 40 33% 97%;
+
+    --border: 40 20% 88%;
+    --input: 40 20% 88%;
+    --ring: 16 65% 55%;
+
+    --radius: 1rem;
+
+    /* Custom Marzi tokens */
+    --marzi-cream: 40 33% 97%;
+    --marzi-terracotta: 16 65% 55%;
+    --marzi-sage: 145 20% 45%;
+    --marzi-gold: 42 55% 55%;
+    --marzi-warm-gray: 25 10% 60%;
+    --marzi-deep-brown: 25 25% 25%;
+
+    /* Gradients */
+    --gradient-sunrise: linear-gradient(135deg, hsl(16 65% 55% / 0.15), hsl(42 55% 55% / 0.1));
+    --gradient-calm: linear-gradient(180deg, hsl(145 20% 45% / 0.1), hsl(40 33% 97%));
+    --gradient-evening: linear-gradient(135deg, hsl(25 25% 25% / 0.05), hsl(16 45% 75% / 0.15));
+    
+    /* Shadows */
+    --shadow-soft: 0 4px 20px -4px hsl(25 20% 20% / 0.08);
+    --shadow-elevated: 0 12px 40px -8px hsl(25 20% 20% / 0.12);
+    --shadow-glow: 0 0 40px hsl(16 65% 55% / 0.15);
+
+    /* Animations */
+    --transition-gentle: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-breathe: all 4s ease-in-out;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 25 20% 12%;
+    --foreground: 40 25% 92%;
+
+    --card: 25 18% 16%;
+    --card-foreground: 40 25% 92%;
+
+    --popover: 25 20% 12%;
+    --popover-foreground: 40 25% 92%;
+
+    --primary: 16 60% 60%;
+    --primary-foreground: 25 20% 12%;
+    --primary-muted: 16 40% 35%;
+
+    --secondary: 145 18% 40%;
+    --secondary-foreground: 40 25% 92%;
+    --secondary-muted: 145 12% 25%;
+
+    --muted: 25 15% 22%;
+    --muted-foreground: 40 15% 65%;
+
+    --accent: 42 50% 50%;
+    --accent-foreground: 25 20% 12%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 40 25% 92%;
+
+    --border: 25 15% 25%;
+    --input: 25 15% 25%;
+    --ring: 16 60% 60%;
+
+    --marzi-cream: 25 20% 12%;
+    --marzi-terracotta: 16 60% 60%;
+    --marzi-sage: 145 18% 40%;
+    --marzi-gold: 42 50% 50%;
+    --marzi-warm-gray: 25 10% 50%;
+    --marzi-deep-brown: 40 20% 85%;
+
+    --gradient-sunrise: linear-gradient(135deg, hsl(16 60% 60% / 0.2), hsl(42 50% 50% / 0.15));
+    --gradient-calm: linear-gradient(180deg, hsl(145 18% 40% / 0.15), hsl(25 20% 12%));
+    --gradient-evening: linear-gradient(135deg, hsl(25 15% 22% / 0.5), hsl(16 40% 35% / 0.2));
+
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-serif;
+  }
+}
+
+@layer components {
+  .marzi-card {
+    @apply bg-card rounded-2xl shadow-soft border border-border/50 p-6;
+  }
+
+  .marzi-button-primary {
+    @apply bg-primary text-primary-foreground rounded-full px-8 py-4 text-lg font-medium transition-gentle hover:shadow-glow active:scale-[0.98];
+  }
+
+  .marzi-button-secondary {
+    @apply bg-secondary/10 text-secondary border border-secondary/20 rounded-full px-8 py-4 text-lg font-medium transition-gentle hover:bg-secondary/20;
+  }
+
+  .marzi-button-ghost {
+    @apply text-muted-foreground rounded-full px-6 py-3 text-base font-medium transition-gentle hover:bg-muted hover:text-foreground;
+  }
+}
+
+@layer utilities {
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .gradient-sunrise {
+    background: var(--gradient-sunrise);
+  }
+
+  .gradient-calm {
+    background: var(--gradient-calm);
+  }
+
+  .gradient-evening {
+    background: var(--gradient-evening);
+  }
+
+  .transition-gentle {
+    transition: var(--transition-gentle);
+  }
+
+  .animate-breathe {
+    animation: breathe 4s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.6s ease-out forwards;
+  }
+
+  .animate-pulse-gentle {
+    animation: pulseGentle 3s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+    50% {
+      transform: scale(1.08);
+      opacity: 1;
+    }
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulseGentle {
+    0%, 100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
