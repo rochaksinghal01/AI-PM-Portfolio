@@ -1,0 +1,29 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #0f0f14;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1a1a18;
+}
+
+:root {
+  --navy: #0D2B5E;
+  --blue: #185FA5;
+  --blue-l: #E6F1FB;
+  --teal: #1D9E75;
+  --teal-l: #E1F5EE;
+  --amber: #BA7517;
+  --amber-l: #FAEEDA;
+  --coral: #993C1D;
+  --coral-l: #FAECE7;
+  --purple: #534AB7;
+  --purple-l: #EEEDFE;
+  --gray: #5F5E5A;
+  --gray-l: #F5F5F3;
+  --white: #FFFFFF;
+  --black: #1A1A18;
+}

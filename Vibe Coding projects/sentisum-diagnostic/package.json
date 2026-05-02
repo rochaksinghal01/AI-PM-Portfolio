@@ -1,0 +1,8 @@
+{
+  "name": "sentisum-diagnostic",
+  "version": "1.0.0",
+  "description": "SentiSum prospect diagnostic tool",
+  "engines": {
+    "node": "22.x"
+  }
+}
