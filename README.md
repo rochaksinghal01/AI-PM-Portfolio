@@ -7,6 +7,8 @@ Bangalore, India · [LinkedIn](https://linkedin.com/in/rochak-singhal) · [Portf
 
 ## 🌐 Live Portfolio
 
+[![Portfolio Preview](./portfolio-preview.png)](https://repo-showcase-quest.lovable.app)
+
 > **[→ View Interactive Portfolio](https://repo-showcase-quest.lovable.app)**  
 > Built with Lovable · Hero · Projects · Experience · Skills — all in one place
 
