@@ -1,65 +1,24 @@
-# Lenskart Frame Guide — In-Store Sales Assistant
+# Lenskart Frame Guide — AI Personalisation Prototype
 
-**Retail AI Companion for Lenskart Store Associates · Built with Lovable**
+> A prototype of Lenskart's in-store and app personalisation experience — swipeable frame recommendations driven by face shape, style preference, and occasion, with an AI chatbot for guided discovery.
 
-🔗 [Live App](https://lenskart-frame-guide.lovable.app)
+## What It Does
 
----
+Users answer preference questions → AI recommends frames via swipeable cards → an embedded chatbot handles follow-up questions and explains why specific frames suit the user.
 
-![Lenskart Frame Guide](./thumbnail.png)
-
----
-
-## Overview
-
-A mobile-first sales assistant designed for Lenskart retail staff to confidently pitch eyewear frames to customers on the shop floor. Associates get instant access to swipeable product cards covering five dimensions — styling, comfort, features, collection identity, and active offers — plus an integrated chatbot to handle any customer question in real time, without leaving the app.
-
----
-
-## Problem Statement
-
-In-store associates at Lenskart often struggle to articulate the full value of premium frames under time pressure, leading to missed upsell opportunities and inconsistent customer experiences. There was no lightweight, phone-friendly tool that consolidated product knowledge, talking points, and live Q&A in one place.
-
----
-
-## User Flow
-
-```
-Associate opens app
-        │
-        ▼
-Product showcase loads
-        │
-        ▼
-Swipe through 5 card dimensions
-  ├── Styling & face shape compatibility
-  ├── Comfort & fit details
-  ├── Features & lens specs
-  ├── Collection identity & brand story
-  └── Active offers & pricing
-        │
-        ▼
-Customer asks a question
-        │
-        ├── Common questions rail (pre-loaded FAQs)
-        └── ChatBot popup (custom real-time Q&A)
-        │
-        ▼
-Associate answers confidently → closes the sale
-```
-
----
+## Features
+- Swipeable frame recommendation cards
+- Question rail for preference capture (face shape, use case, style)
+- AI chatbot popup for guided discovery
+- Wishlist functionality
+- Face scan entry point (RFID integration prototype)
 
 ## Tech Stack
+- React + TypeScript
+- Vite + Tailwind CSS + shadcn/ui
 
-| Component | Technology |
-|---|---|
-| Frontend Framework | React 18 + TypeScript |
-| Build Tool | Vite |
-| UI Components | Radix UI + shadcn/ui |
-| Styling | Tailwind CSS |
-| Form Handling | React Hook Form + Zod |
-| Data Fetching | TanStack React Query |
-| Notifications | Sonner |
-| Icons | Lucide React |
-| Platform | Lovable |
+## Context
+Built while working as PM at Lenskart, where I owned the AI personalisation roadmap. The in-store RFID + AI system (Project Handheld) drove **store conversion +4.5% and AOV +6%** across a 10-store pilot.
+
+---
+**Built by Rochak Singhal** — [LinkedIn](https://linkedin.com/in/rochak-singhal) · [Portfolio](https://github.com/rochaksinghal01/AI-PM-Portfolio)

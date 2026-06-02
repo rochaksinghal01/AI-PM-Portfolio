@@ -1,66 +1,17 @@
-# Sentisum CX Diagnostic — Prospect Intelligence Tool
+# SentiSum Prospect Diagnostic
 
-**AI-Powered CX Research & Cold Outreach Generator · Built on Vercel**
+> A pre-sales diagnostic tool that qualifies prospects by mapping their CX pain points to Sentisum's capabilities — generating a personalised diagnostic report before the first sales call.
 
-🔗 [Live App](https://sentisum-cxdiagonistics.vercel.app)
+## What It Does
 
----
+Prospect fills a short questionnaire → tool analyses their CX stack and pain points → generates a tailored report showing exactly which Sentisum features solve their specific challenges and the expected ROI.
 
-![Sentisum CX Diagnostic](./thumbnail.png)
-
----
-
-## Overview
-
-A prospect diagnostic tool that generates real-time CX intelligence reports on target companies by scanning public signals — app store reviews, social media, news, and community forums. Sales reps get a full picture of a prospect's real customer experience challenges, plus a ready-to-use cold outreach kit with evidence-backed pain points and a draft personalised email.
-
----
-
-## Problem Statement
-
-Sales development reps at Sentisum were spending hours researching prospects manually before outreach — reading reviews, scanning LinkedIn, and guessing at pain points. There was no automated way to quickly surface what a company's customers were actually complaining about, making outreach generic and easy to ignore.
-
----
-
-## User Flow
-
-```
-SDR opens the tool
-        │
-        ▼
-Input: company name · persona · industry
-        │
-        ▼
-Loading screen with step-by-step progress
-  ├── Scanning app store reviews
-  ├── Analysing social signals
-  ├── Pulling news mentions
-  └── Generating intelligence report
-        │
-        ▼
-Full diagnostic report generated
-  ├── Hero stats (review volume, sentiment score)
-  ├── Key customer findings
-  ├── Top issues & intent signals
-  ├── What customers praise
-  └── Automation & AI gap analysis
-        │
-        ▼
-Outreach kit
-  ├── Top 3 pain points with real customer quotes
-  └── Draft personalised cold email
-        │
-        ▼
-Share or download report · Previous searches in history
-```
-
----
+## Why It Exists
+Enterprise SaaS sales cycles are long because prospects don't immediately see fit. This tool accelerates qualification by making value concrete and personalised — closing the gap between "interesting product" and "I need this now."
 
 ## Tech Stack
+- Vanilla HTML/CSS/JS (lightweight, fast-loading for sales demos)
+- Vercel serverless API for report generation
 
-| Component | Technology |
-|---|---|
-| Frontend | Vanilla HTML + CSS + JavaScript |
-| Backend | Serverless API endpoint (`/api/generate`) |
-| Data Persistence | LocalStorage (search history) |
-| Deployment | Vercel |
+---
+**Built by Rochak Singhal** — [LinkedIn](https://linkedin.com/in/rochak-singhal) · [Portfolio](https://github.com/rochaksinghal01/AI-PM-Portfolio)

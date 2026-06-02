@@ -1,70 +1,25 @@
-# Call Insight Craft — AI Call Quality Evaluation Dashboard
+# Call Insight Craft — AI Call Evaluation Tool
 
-**Contact Centre QA Intelligence Platform · Built with Lovable**
+> Takes support call transcripts and scores them across quality dimensions — automatically routing feedback to the right team and flagging coaching opportunities.
 
-🔗 [Live App](https://call-insight-craft.lovable.app)
+## What It Does
 
----
+Paste a call transcript → AI evaluates across multiple quality dimensions (empathy, resolution, CSAT risk, compliance) → generates a structured scorecard → routes to the right team based on the outcome.
 
-![Call Insight Craft](./thumbnail.png)
-
----
-
-## Overview
-
-An AI-powered call quality evaluation dashboard for contact centres. QA managers and team leads can submit calls for evaluation, receive dimension-based quality scores, and surface performance patterns across their teams — replacing slow, manual call auditing with structured, automated insight.
-
----
-
-## Problem Statement
-
-Contact centre QA teams spend hours manually listening to and scoring calls with no consistency across reviewers. Managers lack a single view of call quality trends, team-level patterns, and routing signals. A lightweight evaluation tool with clear scoring dimensions and analytics was missing from most mid-market QA stacks.
-
----
-
-## User Flow
-
-```
-Manager opens dashboard
-        │
-        ▼
-Submit call for evaluation
-  └── Upload or link call recording
-        │
-        ▼
-AI evaluates across quality dimensions
-  ├── Communication clarity
-  ├── Issue resolution
-  ├── Empathy & tone
-  ├── Process adherence
-  └── Customer satisfaction signal
-        │
-        ▼
-Dimension scores generated
-        │
-        ▼
-Dashboard view
-  ├── Call metrics overview
-  ├── Team performance trends
-  └── Routing recommendations
-        │
-        ▼
-Drill into individual call analytics
-```
-
----
+## Features
+- Transcript input and viewer
+- Multi-dimension scoring with score badges
+- Call summary card with key highlights
+- Smart team routing recommendations
+- KPI dashboard across all evaluated calls
+- Export scored evaluations
 
 ## Tech Stack
+- React + TypeScript
+- Vite + Tailwind CSS + shadcn/ui
 
-| Component | Technology |
-|---|---|
-| Frontend Framework | React 18 + TypeScript |
-| Build Tool | Vite |
-| UI Components | Radix UI + shadcn/ui |
-| Styling | Tailwind CSS |
-| Backend & Auth | Supabase |
-| Data Fetching | TanStack React Query |
-| Animations | Framer Motion |
-| Charts | Recharts |
-| Icons | Lucide React |
-| Platform | Lovable |
+## Why This Matters
+Manual QA of support calls is slow and inconsistent. This standardises evaluation at scale — same rubric, every call, instant feedback.
+
+---
+**Built by Rochak Singhal** — [LinkedIn](https://linkedin.com/in/rochak-singhal) · [Portfolio](https://github.com/rochaksinghal01/AI-PM-Portfolio)

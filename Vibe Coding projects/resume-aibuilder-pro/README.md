@@ -1,61 +1,27 @@
-# Resume AI Builder Pro — ATS-Optimised Resume Generator
+# Resume AI Builder Pro
 
-**AI-Powered Resume Keyword Matching for Job Seekers · Built with Lovable**
+> A personalised resume generator that takes a job description, extracts key requirements and keywords, and rewrites your resume to match — so every application is tailored, not generic.
 
-🔗 [Live App](https://resume-aibuilder-pro.lovable.app)
+## What It Does
 
----
+Paste a job URL or description → the tool extracts the role's key skills and requirements → maps them against your profile → generates a tailored resume optimised for that specific JD. Built for job seekers who apply to multiple roles and need to customise without doing it manually every time.
 
-![Resume AI Builder Pro](./thumbnail.png)
-
----
-
-## Overview
-
-An AI-powered resume builder that helps job seekers optimise their resumes against specific job descriptions. Users paste a job description, receive AI-generated keyword recommendations tailored to that role, and get a formatted, ATS-ready resume output — in minutes, not hours.
-
----
-
-## Problem Statement
-
-Most job seekers submit generic resumes that fail Applicant Tracking System (ATS) filters before a human ever reads them. Manually tailoring a resume for each application is time-consuming and inconsistent. There was no fast, guided tool that combined keyword intelligence with formatted resume output in a single flow.
-
----
-
-## User Flow
+## How It Works
 
 ```
-User lands on app
-        │
-        ▼
-Step 1: Job Input
-  └── Paste job title + job description
-        │
-        ▼
-Step 2: AI Processing
-  └── Loading state while AI analyses the JD
-        │
-        ▼
-Step 3: Keyword Recommendations
-  └── AI surfaces high-impact keywords to include
-        │
-        ▼
-Step 4: Resume Output
-  └── Formatted, ATS-optimised resume ready to download
+Step 1: Job Input       → paste JD or job URL
+Step 2: Keyword Extract → AI identifies must-have skills, experience, and tone
+Step 3: Resume Rewrite  → your base resume rewritten to match the JD
+Step 4: Export          → download the tailored version
 ```
-
----
 
 ## Tech Stack
+- React + TypeScript + Zustand (state across steps)
+- Vite + Tailwind CSS + shadcn/ui
+- AI-powered keyword extraction and resume rewriting
 
-| Component | Technology |
-|---|---|
-| Frontend Framework | React 18 + TypeScript |
-| Build Tool | Vite |
-| UI Components | Radix UI + shadcn/ui |
-| Styling | Tailwind CSS |
-| State Management | Zustand |
-| Form Handling | React Hook Form + Zod |
-| Data Fetching | TanStack React Query |
-| Icons | Lucide React |
-| Platform | Lovable |
+## Why I Built This
+ATS systems reject good candidates because the keywords don't match. This tool fixes that at scale — one base resume, infinite tailored versions.
+
+---
+**Built by Rochak Singhal** — [LinkedIn](https://linkedin.com/in/rochak-singhal) · [Portfolio](https://github.com/rochaksinghal01/AI-PM-Portfolio)

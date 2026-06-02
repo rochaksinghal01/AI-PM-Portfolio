@@ -1,67 +1,23 @@
-# Marzi — Your Gentle Wellness Companion
+# Marzi — Gentle Companion App
 
-**AI-Powered Daily Calm & Mindfulness App · Built with Lovable**
+> A personalised wellness companion that adapts to your time of day and interests — surfacing contextual moments, activities, and gentle nudges that match where you are emotionally and what you enjoy.
 
-🔗 [Live App](https://marzi-gentle-companion.lovable.app)
+## What It Does
 
----
+Marzi learns your interests during onboarding, then serves personalised "moments" and activities throughout the day — morning meditation prompts, midday movement nudges, evening wind-down suggestions — all contextual to the time and your preferences.
 
-![Marzi Gentle Companion](./thumbnail.png)
-
----
-
-## Overview
-
-Marzi is a wellness companion app that delivers personalised calm moments and mindfulness activities throughout the day. The app greets users based on the time of day, adapts content to their mood and stated interests, and offers curated meditations, breathing exercises, and gentle check-ins — making wellbeing feel effortless rather than effortful.
-
----
-
-## Problem Statement
-
-Most wellness apps feel like another item on the to-do list — structured, scheduled, and guilt-inducing when skipped. There was a gap for a low-friction companion that meets users where they are emotionally, without demanding commitment or consistency from day one.
-
----
-
-## User Flow
-
-```
-User opens app
-        │
-        ▼
-Time-aware greeting
-  └── Good morning / afternoon / evening, personalised
-        │
-        ▼
-Onboarding (first visit)
-  └── Select wellness interests & preferences
-        │
-        ▼
-Two-tab home experience
-  ├── Moments tab
-  │     └── Meditations, breathing, calm content
-  └── Wellness tab
-        └── Activities, movement, habit suggestions
-        │
-        ▼
-Mood / feeling selector
-  └── Adapts content recommendations to current state
-        │
-        ▼
-Complete activity → mark done → streak tracking
-```
-
----
+## Features
+- Personalised onboarding (interest selection)
+- Time-of-day aware greeting and content
+- Moment cards (contextual emotional content)
+- Activity recommendations
+- Moments / Wellness tab navigation
+- User preference persistence
 
 ## Tech Stack
+- React + TypeScript
+- Custom hooks for time-of-day logic and user preferences
+- Vite + Tailwind CSS + shadcn/ui
 
-| Component | Technology |
-|---|---|
-| Frontend Framework | React 18 + TypeScript |
-| Build Tool | Vite |
-| UI Components | Radix UI + shadcn/ui |
-| Styling | Tailwind CSS |
-| Form Handling | React Hook Form + Zod |
-| Data Fetching | TanStack React Query |
-| Notifications | Sonner |
-| Icons | Lucide React |
-| Platform | Lovable |
+---
+**Built by Rochak Singhal** — [LinkedIn](https://linkedin.com/in/rochak-singhal) · [Portfolio](https://github.com/rochaksinghal01/AI-PM-Portfolio)
