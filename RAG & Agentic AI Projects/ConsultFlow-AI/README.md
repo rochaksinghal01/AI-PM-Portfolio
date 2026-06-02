@@ -2,7 +2,7 @@
 
 > An end-to-end AI system that automates consulting deck creation by combining a 5-gate agentic pipeline with a RAG layer trained on institutional knowledge — so every junior analyst produces output informed by your firm's most senior consultants.
 
-**🔗 Live Demo:** [tanstack-start-app.rochak-singhal.workers.dev](https://tanstack-start-app.rochak-singhal.workers.dev)
+**🔗 Live Demo:** [tanstack-start-app.rochak-singhal.workers.dev](https://tanstack-start-app.rochak-singhal.workers.dev) · **💻 Source Code:** [github.com/rochaksinghal01/consultflow-ai](https://github.com/rochaksinghal01/consultflow-ai)
 
 ---
 
