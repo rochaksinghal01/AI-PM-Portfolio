@@ -28,6 +28,11 @@ It defaults to a clearly-logged mock heuristic for the LLM step when no `OPENROU
 - `leads_output_resilience_demo.csv` — enrichment enabled in a network-restricted sandbox, showing every row correctly flagged (not crashed) when the enrichment API is unreachable
 - `leads_output_ragged_csv_demo.csv` — a hand-built CSV with malformed row structure (too many/few columns), showing 0 rows dropped
 
+## Platform Choice: Why n8n
+I picked n8n over Zapier, Make, or a code-first orchestrator (Airflow/Prefect) for a few concrete reasons tied to this brief specifically: it has real per-node retry and "continue on fail" behavior out of the box, which is what the "survive failure" requirement is actually asking for — a bad row gets flagged, not a crashed run. It has a native Postgres node, so the storage step isn't a custom integration. And it exports as inspectable JSON, so a reviewer can read the workflow itself rather than trusting my description of it. Airflow/Prefect would be the stronger choice if this were actually running at 50k leads/day (see below) — but that's a heavier tool than a 10-row intake pipeline calls for.
+
+The personal reason matters just as much here: I have unlimited access to n8n through The Product Space, and it's the automation tool I'm most fluent in day to day — I've already shipped n8n workflows for procurement scorecards, support chatbots, and job-application automation (see the rest of `Agentic Workflows/` in this repo). Building this in a tool I already know well let me put the time into the pipeline logic and failure handling instead of learning new platform mechanics under a 3-day clock.
+
 ## Decisions & Assumptions
 - **Duplicates aren't merged.** Two leads sharing an email but different name/company spelling get a soft `possible duplicate` flag, not an automatic merge — which record wins felt like a business call, not a pipeline one.
 - **Malformed structure vs. bad data are handled differently.** Ragged CSV rows are repaired (padded/merged) and flagged; bad data (invalid email, empty notes) is left as-is and flagged for human review rather than silently fixed.
