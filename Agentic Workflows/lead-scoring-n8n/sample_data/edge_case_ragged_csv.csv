@@ -1,0 +1,5 @@
+lead_id,name,email,company,raw_notes,source
+E001,Test Ragged,test@ragged.com,RaggedCo,Wants pricing, urgently, please call, web
+E002,Test Short,short@short.com,ShortCo
+E003,,noemail-notvalid,,,,
+E004,Good Row,good@goodco.com,GoodCo,Standard interest note,referral

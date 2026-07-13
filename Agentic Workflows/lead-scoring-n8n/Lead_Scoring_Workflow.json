@@ -1,0 +1,332 @@
+{
+  "name": "Lead Cleaning, Enrichment & Prioritization",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1400,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "read_file",
+      "name": "Read CSV File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -1180,
+        0
+      ],
+      "notes": "Points at the leads CSV on disk. Swap for an HTTP Request / S3 / Google Drive node if the file arrives another way.",
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/leads_sample.csv",
+        "options": {}
+      }
+    },
+    {
+      "id": "extract_text",
+      "name": "Extract CSV Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -960,
+        0
+      ],
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "data"
+      }
+    },
+    {
+      "id": "parse_csv",
+      "name": "Parse CSV (tolerant)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -740,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Reads the whole-file text (from the \"Extract CSV Text\" node) and tolerantly\n// parses it. Ragged rows (too few / too many columns) are repaired and\n// flagged - never dropped. Mirrors pipeline.py's ingest() function.\n\nconst text = $input.first().json.data;\n\nfunction splitCsvLine(line) {\n  const fields = [];\n  let cur = '';\n  let inQuotes = false;\n  for (let i = 0; i < line.length; i++) {\n    const ch = line[i];\n    if (inQuotes) {\n      if (ch === '\"') {\n        if (line[i + 1] === '\"') { cur += '\"'; i++; }\n        else { inQuotes = false; }\n      } else {\n        cur += ch;\n      }\n    } else if (ch === '\"') {\n      inQuotes = true;\n    } else if (ch === ',') {\n      fields.push(cur);\n      cur = '';\n    } else {\n      cur += ch;\n    }\n  }\n  fields.push(cur);\n  return fields;\n}\n\nconst lines = text.split(/\\r\\n|\\n|\\r/).filter((l) => l.length > 0);\nif (lines.length === 0) return [];\n\nconst header = splitCsvLine(lines[0]).map((h) => h.trim());\nconst nExpected = header.length;\nconst results = [];\n\nfor (let i = 1; i < lines.length; i++) {\n  const flags = [];\n  let fields = splitCsvLine(lines[i]);\n  if (fields.every((f) => f.trim() === '')) continue; // blank line, not a lead row\n\n  if (fields.length < nExpected) {\n    flags.push(`structural: expected ${nExpected} columns, got ${fields.length} at line ${i + 1}`);\n    while (fields.length < nExpected) fields.push('');\n  } else if (fields.length > nExpected) {\n    const notesIdx = header.indexOf('raw_notes') >= 0 ? header.indexOf('raw_notes') : nExpected - 2;\n    const head = fields.slice(0, notesIdx);\n    const hasTailCol = nExpected - notesIdx - 1 === 1;\n    const tail = hasTailCol ? fields[fields.length - 1] : null;\n    const mergedNotes = fields.slice(notesIdx, fields.length - (hasTailCol ? 1 : 0)).join(',');\n    let repaired = [...head, mergedNotes];\n    if (tail !== null) repaired.push(tail);\n    while (repaired.length < nExpected) repaired.push('');\n    fields = repaired.slice(0, nExpected);\n    flags.push(`structural: expected ${nExpected} columns, got more at line ${i + 1} (auto-merged extra commas into raw_notes)`);\n  }\n\n  const row = {};\n  header.forEach((h, idx) => { row[h] = fields[idx] !== undefined ? fields[idx] : ''; });\n  row._line_no = i + 1;\n  row._ingest_flags = flags;\n  results.push({ json: row });\n}\n\nreturn results;"
+      }
+    },
+    {
+      "id": "clean_validate",
+      "name": "Clean & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -520,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Per-lead validation. Uses workflow static data to spot same-email\n// duplicates across the whole run (soft flag, not a drop).\n\nconst staticData = $getWorkflowStaticData('node');\nif (!staticData.seenEmails) staticData.seenEmails = {};\n\nconst row = $json;\nconst flags = [...(row._ingest_flags || [])];\n\nconst leadId = (row.lead_id || '').trim();\nconst name = (row.name || '').trim();\nconst email = (row.email || '').trim().toLowerCase();\nconst company = (row.company || '').trim();\nconst rawNotes = (row.raw_notes || '').trim();\nconst source = (row.source || '').trim().toLowerCase() || 'unknown';\n\nconst emailRe = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;\nconst emailValid = emailRe.test(email);\n\nif (!leadId) flags.push('missing lead_id');\nif (!email) flags.push('missing email');\nelse if (!emailValid) flags.push(`malformed email: '${email}'`);\nif (!company) flags.push('missing company');\nif (!rawNotes) flags.push('empty raw_notes');\n\nif (emailValid) {\n  if (staticData.seenEmails[email]) {\n    flags.push(`possible duplicate of ${staticData.seenEmails[email]} (same email)`);\n  } else {\n    staticData.seenEmails[email] = leadId || `line ${row._line_no}`;\n  }\n}\n\nreturn {\n  json: {\n    lead_id: leadId || `UNKNOWN-${row._line_no}`,\n    name: name || null,\n    email: email || null,\n    email_valid: emailValid,\n    company: company || null,\n    raw_notes: rawNotes || null,\n    source,\n    flags,\n  },\n};"
+      }
+    },
+    {
+      "id": "derive_domain",
+      "name": "Derive Domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Enrichment step 1 (required by the brief): derive the domain from the\n// email. If the email is missing/invalid, fall back to a low-confidence\n// guess from the company name rather than leaving the row un-enrichable.\n\nfunction guessDomainFromCompany(company) {\n  if (!company) return null;\n  const slug = company.toLowerCase().replace(/[^a-z0-9]/g, '');\n  return slug ? `${slug}.com` : null;\n}\n\nconst lead = $json;\nconst flags = [...lead.flags];\nlet domain = null;\nlet domainSource = null;\n\nif (lead.email_valid) {\n  domain = lead.email.split('@')[1];\n  domainSource = 'email';\n} else {\n  domain = guessDomainFromCompany(lead.company);\n  domainSource = domain ? 'inferred_from_company_name' : null;\n  if (domain) flags.push(`domain guessed from company name (low confidence): ${domain}`);\n  else flags.push('could not derive domain: no valid email and no company name');\n}\n\nreturn { json: { ...lead, domain, domain_source: domainSource, flags } };"
+      }
+    },
+    {
+      "id": "enrich_http",
+      "name": "Enrich - Disify Email Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -80,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "notes": "Free, no-API-key domain/email check (disify.com). Optional 'go further' enrichment - onError is set to continue so a network blip flags the row instead of killing the run.",
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.disify.com/api/email/{{ $json.email || $json.domain }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "merge_enrichment",
+      "name": "Merge Enrichment Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        140,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// The \"Enrich - Disify Email Check\" HTTP node has onError = continueRegularOutput,\n// so a network failure produces an item with an `error` field instead of\n// crashing the run. Pull the lead fields from the last known-good node\n// (Derive Domain) rather than trusting $json here, since a failed HTTP node\n// can replace the item JSON entirely.\n\nconst lead = $('Derive Domain').item.json;\nconst resp = $json;\nconst flags = [...lead.flags];\n\nlet disposable = null;\nlet deliverable = null;\n\nif (resp && resp.error) {\n  flags.push(`enrichment API failed (non-fatal): ${resp.error.message || JSON.stringify(resp.error)}`);\n} else if (lead.domain) {\n  disposable = resp.disposable !== undefined ? resp.disposable : null;\n  deliverable = resp.dns !== undefined ? resp.dns : (resp.format !== undefined ? resp.format : null);\n}\n\nreturn { json: { ...lead, domain_is_disposable: disposable, domain_deliverable: deliverable, flags } };"
+      }
+    },
+    {
+      "id": "llm_http",
+      "name": "Prioritize - OpenRouter LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        360,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "notes": "One LLM call per lead. Requires an OpenRouter credential/API key set as the OPENROUTER_API_KEY environment variable (Settings > Variables, or n8n env). Verify the current free model slug at openrouter.ai/models - they change often; meta-llama/llama-3.2-3b-instruct:free was current as of mid-2025 but is not guaranteed to still exist.",
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.OPENROUTER_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"{{ $env.OPENROUTER_MODEL || 'meta-llama/llama-3.2-3b-instruct:free' }}\",\n  \"temperature\": 0,\n  \"messages\": [ { \"role\": \"user\", \"content\": {{ JSON.stringify(\"You triage inbound sales leads. Read the notes below and respond with ONLY a JSON object, no other text: {\\\"priority\\\": \\\"high|medium|low\\\", \\\"summary\\\": \\\"one sentence, <20 words\\\"}. Guidance: high = clear buying intent, urgency, or budget/timeline mentioned. low = explicitly not interested, browsing only, or notes are empty/gibberish. medium = anything else / genuinely ambiguous.\\n\\nLead notes: \\\"\\\"\\\"\" + ($json.raw_notes || '(no notes provided)') + \"\\\"\\\"\\\"\") }} } ]\n}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "finalize",
+      "name": "Parse LLM Output & Finalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        580,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// The \"Prioritize - OpenRouter LLM\" HTTP node also has onError =\n// continueRegularOutput and retryOnFail enabled, so a model/API failure\n// flags the row instead of stopping the run. Same pattern as above: pull\n// lead fields from the last known-good node.\n\nconst lead = $('Merge Enrichment Result').item.json;\nconst resp = $json;\nconst flags = [...lead.flags];\nlet priority = 'unknown';\nlet summary = 'LLM enrichment failed for this row.';\n\nif (resp && resp.error) {\n  flags.push(`LLM call failed, row flagged not dropped: ${resp.error.message || JSON.stringify(resp.error)}`);\n} else {\n  try {\n    let content = resp.choices[0].message.content.trim();\n    content = content.replace(/^```(json)?/i, '').replace(/```$/, '').trim();\n    const parsed = JSON.parse(content);\n    const p = String(parsed.priority || '').toLowerCase().trim();\n    if (!['high', 'medium', 'low'].includes(p)) throw new Error(`unexpected priority value: ${p}`);\n    priority = p;\n    summary = String(parsed.summary || '').slice(0, 300);\n  } catch (e) {\n    flags.push(`LLM response could not be parsed, row flagged not dropped: ${e.message}`);\n  }\n}\n\nconst status = flags.length ? 'flagged' : 'ok';\n\nreturn {\n  json: {\n    lead_id: lead.lead_id,\n    name: lead.name,\n    email: lead.email,\n    email_valid: lead.email_valid,\n    company: lead.company,\n    domain: lead.domain,\n    domain_source: lead.domain_source,\n    domain_is_disposable: lead.domain_is_disposable,\n    raw_notes: lead.raw_notes,\n    source: lead.source,\n    priority,\n    summary,\n    status,\n    flags: flags.join(' | '),\n  },\n};"
+      }
+    },
+    {
+      "id": "postgres_upsert",
+      "name": "Upsert into leads_enriched",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        800,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "notes": "Works against self-hosted Postgres or Supabase (Supabase is managed Postgres - use its connection-pooler host/port/user/password/db as the Postgres credential). Run schema.sql once first.",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_CREDENTIAL_ID",
+          "name": "Supabase / Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leads_enriched\n  (lead_id, name, email, email_valid, company, domain, domain_source, domain_is_disposable, raw_notes, source, priority, summary, status, flags)\nVALUES\n  ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)\nON CONFLICT (lead_id) DO UPDATE SET\n  name=EXCLUDED.name, email=EXCLUDED.email, email_valid=EXCLUDED.email_valid, company=EXCLUDED.company,\n  domain=EXCLUDED.domain, domain_source=EXCLUDED.domain_source, domain_is_disposable=EXCLUDED.domain_is_disposable,\n  raw_notes=EXCLUDED.raw_notes, source=EXCLUDED.source, priority=EXCLUDED.priority, summary=EXCLUDED.summary,\n  status=EXCLUDED.status, flags=EXCLUDED.flags;",
+        "options": {
+          "queryReplacement": "={{ [$json.lead_id, $json.name, $json.email, $json.email_valid, $json.company, $json.domain, $json.domain_source, $json.domain_is_disposable, $json.raw_notes, $json.source, $json.priority, $json.summary, $json.status, $json.flags] }}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read CSV File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV File": {
+      "main": [
+        [
+          {
+            "node": "Extract CSV Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract CSV Text": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV (tolerant)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV (tolerant)": {
+      "main": [
+        [
+          {
+            "node": "Clean & Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean & Validate": {
+      "main": [
+        [
+          {
+            "node": "Derive Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Derive Domain": {
+      "main": [
+        [
+          {
+            "node": "Enrich - Disify Email Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich - Disify Email Check": {
+      "main": [
+        [
+          {
+            "node": "Merge Enrichment Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Enrichment Result": {
+      "main": [
+        [
+          {
+            "node": "Prioritize - OpenRouter LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prioritize - OpenRouter LLM": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM Output & Finalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LLM Output & Finalize": {
+      "main": [
+        [
+          {
+            "node": "Upsert into leads_enriched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instructions": "Hand-authored export - not yet imported into a live n8n instance to confirm node-parameter schema exactly matches your n8n version (HTTP Request v4.2 and Postgres v2.5 assumed). Import via Workflows > Import from File, wire up the Postgres credential, set OPENROUTER_API_KEY (and optionally OPENROUTER_MODEL) as environment variables, fix the file path in 'Read CSV File', and run once to smoke-test before recording."
+  }
+}

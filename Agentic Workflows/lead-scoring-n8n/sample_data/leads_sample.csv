@@ -1,0 +1,11 @@
+lead_id,name,email,company,raw_notes,source
+L001,Anil Kumar,anil@acmecorp.com,Acme Corp,"Interested in bulk order, needs a quote by Friday",web
+L002,Priya Sharma,priya@globex.in,Globex,"Urgent, wants to close this quarter, budget already approved",referral
+L003,Ravi Verma,ravi.verma.gmail.com,Verma Traders,Asked for a callback sometime,web
+L004,Sneha Rao,sneha@lumen.co,Lumen,,web
+L005,Anil K,anil@acmecorp.com,Acme,Following up on the quote,web
+L006,Karthik Nair,karthik@fastmail.com,,"Low priority, just browsing for now",web
+L007,Meena Iyer,meena@zenith.io,Zenith,"Not interested right now, maybe revisit next year",web
+L008,Farah Khan,farah@nova.com,Nova,asdkfj qwer ndjf zzz,web
+L009,Deepak Menon,deepak@orbit.in,Orbit,"We spoke at the trade expo last month and your team followed up twice. We are evaluating three vendors and need pricing for a 500 unit order, delivery to two warehouses, net 30 terms, and a reference customer in our sector before we can take this to our procurement committee next quarter.",event
+L010,Rohan Gupta,rohan@@mesh.com,Mesh,Wants a product demo next week,web
