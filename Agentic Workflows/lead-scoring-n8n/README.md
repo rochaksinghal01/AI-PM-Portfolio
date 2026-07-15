@@ -5,12 +5,12 @@ enriches it, scores it into Hot / Warm / Cold with an LLM-assisted judge step, s
 in Supabase, and exposes a small web frontend for uploading files and working a human-review
 queue. Built in n8n, running live at a production webhook.
 
-**Live frontend:** https://rochaksinghal01.github.io/AI-PM-Portfolio/Agentic%20Workflows/lead-scoring-n8n/frontend-react/dist/
-Nothing further is needed to make this work — the Supabase publishable key and n8n webhook URL
-are already baked into the build (see §6), and both the n8n workflow and the Supabase table are
-live, so the link uploads and queries for real, not against a mock. If it 404s, GitHub Pages
-just hasn't been switched on for this repo yet: Settings → Pages → Deploy from a branch →
-`main` / `/ (root)` → Save, then wait about a minute.
+**Live frontend:** https://lead-scoring-n8n-frontend.vercel.app
+Deployed via Vercel, building `frontend-react/` directly from this repo (root directory set to
+`Agentic Workflows/lead-scoring-n8n/frontend-react`, framework preset Vite). Nothing further is
+needed to make this work — the Supabase publishable key and n8n webhook URL are already baked
+into the build (see §6), and both the n8n workflow and the Supabase table are live, so the link
+uploads and queries for real, not against a mock.
 
 ## 1. The brief, verbatim
 
@@ -200,10 +200,11 @@ uploading a CSV, and clearing the human-review queue.
   Babel-standalone, no build step needed to open it).
 - `frontend-react/` — a proper Vite + React project (the same components as ES modules), for
   anyone who wants a real build pipeline rather than a CDN script tag. Builds clean
-  (`npm run build` → ~150KB bundle), and the built `dist/` is committed and published via GitHub
-  Pages — link at the top of this file. The Supabase publishable key and the n8n webhook URL are
-  compiled into that build (`src/App.jsx`), so the live link needs no setup on your end: it talks
-  to the real, live n8n workflow and the real Supabase table, not a mock.
+  (`npm run build` → ~150KB bundle) and is deployed on Vercel — link at the top of this file. The
+  Supabase publishable key and the n8n webhook URL are compiled into that build (`src/App.jsx`),
+  so the live link needs no setup on your end: it talks to the real, live n8n workflow and the
+  real Supabase table, not a mock. (A pre-built `dist/` is also committed in this folder in case
+  anyone wants to serve it from somewhere else without rerunning the build.)
 
 Features: upload panel that posts straight to the n8n production webhook; a review queue read
 from Supabase filterable by tier (Hot/Warm/Cold/all) and by scope (needs-review-only vs. every
@@ -272,15 +273,14 @@ table a human is expected to read start to end.
 
 | File | What it is |
 |---|---|
-| `leads_workflow_v3.json` | The live, production n8n workflow export — the primary deliverable (Gemini LLM chains + Supabase storage) |
-| `leads_workflow_v2.json`, `leads_workflow_v1.json` | Earlier iterations, kept for the build history |
-| `schema_v2.sql` | Supabase/Postgres DDL for `leads_scored` (current) |
-| `schema.sql` | Original v1 Postgres DDL, kept for history |
-| `pipeline.py`, `requirements.txt` | Standalone Python reference implementation of the same ingest → validate → enrich → score → store logic |
-| `frontend.html`, `frontend_react.html`, `frontend-react/` | Operator frontend, three forms (plain HTML/JS / single-file React via CDN / full Vite+React project — `dist/` is the published build) |
+| `leads_workflow_v3.json` | The live, production n8n workflow export — the primary deliverable |
+| `leads_workflow_v2.json`, `leads_workflow.json` | Earlier iterations, kept for the build history |
+| `schema_v2.sql` | Supabase/Postgres DDL for `leads_scored` |
+| `pipeline.py` | Standalone Python reference implementation of the same logic |
+| `frontend.html`, `frontend_react.html`, `frontend-react/` | Operator frontend, three forms (plain / single-file React / Vite project) |
 | `PLANNING.md` | The use-case inventory and design decisions written *before* the v2 rebuild |
-| `sample_data/` | `leads_sample.csv` and a hand-built ragged-CSV edge case |
-| `sample_output/` | `pipeline.py` run outputs against the clean, ragged, and resilience-test inputs |
+| `leads_sample.csv`, `edge_case_test.csv` | Sample and hand-built edge-case input files |
+| `output/`, `output_clean/`, `output_edge/` | `pipeline.py` run outputs against each input file |
 
 ## 9. Known limitations, said plainly
 
