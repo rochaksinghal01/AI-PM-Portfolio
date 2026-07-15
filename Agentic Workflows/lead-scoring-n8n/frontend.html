@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Lead Scoring — Upload &amp; Review</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #0f1115; color: #e8e8ea; margin: 0; padding: 32px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #9a9aa2; font-size: 13px; margin-bottom: 28px; }
+  .card { background: #181a20; border: 1px solid #2a2d36; border-radius: 10px; padding: 20px; margin-bottom: 24px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; }
+  input[type=file] { color: #e8e8ea; }
+  button { background: #4f7cff; color: white; border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  button:hover { background: #3d67e0; }
+  button.secondary { background: #2a2d36; }
+  button.secondary:hover { background: #363a46; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #2a2d36; vertical-align: top; }
+  th { color: #9a9aa2; font-weight: 500; }
+  .tier { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .tier-Hot { background: #4a1f1f; color: #ff8a8a; }
+  .tier-Warm { background: #4a3d1f; color: #ffcf6b; }
+  .tier-Cold { background: #1f2c4a; color: #8ab4ff; }
+  .status-msg { font-size: 13px; margin-top: 10px; }
+  .status-ok { color: #7dd88a; }
+  .status-err { color: #ff8a8a; }
+  .note { font-size: 12px; color: #7a7a84; margin-top: 8px; }
+  .empty { color: #7a7a84; font-size: 13px; padding: 12px 0; }
+</style>
+</head>
+<body>
+
+<h1>Lead Scoring — Upload &amp; Review</h1>
+<div class="sub">Upload a leads CSV to n8n, review anything flagged for a human before it's acted on.</div>
+
+<div class="card">
+  <h2>1. Upload leads CSV</h2>
+  <input type="file" id="csvFile" accept=".csv" />
+  <button id="uploadBtn">Send to n8n</button>
+  <div class="status-msg" id="uploadStatus"></div>
+  <div class="note">
+    Posts to the n8n webhook configured below. The workflow must be <strong>active</strong> (production URL) or
+    listening for a test event (test URL) for this to work.
+  </div>
+</div>
+
+<div class="card">
+  <h2>2. Human review queue</h2>
+  <button class="secondary" id="refreshBtn">Refresh</button>
+  <div class="status-msg" id="queueStatus"></div>
+  <table id="queueTable" style="display:none">
+    <thead>
+      <tr><th>Lead</th><th>Company</th><th>Tier</th><th>Reason</th><th>Summary</th><th></th></tr>
+    </thead>
+    <tbody id="queueBody"></tbody>
+  </table>
+  <div class="empty" id="queueEmpty">No rows loaded yet — click Refresh.</div>
+</div>
+
+<script>
+// ---- Configuration -------------------------------------------------------
+// Supabase: safe to keep the PUBLISHABLE key here, that's what it's for.
+// Never put the secret key in this file or any browser-facing code.
+const SUPABASE_URL = "https://fcbkjasbexttbivcgveq.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_OEaf0d91p9b7OxmCht05Rg_nUkyo_8P";
+
+// n8n: pick whichever is actually listening right now.
+// Production (workflow toggled Active, top-right in the editor):
+const N8N_WEBHOOK_URL = "https://rochal10.app.n8n.cloud/webhook/leads-upload";
+// Test mode (workflow open, "Listen for test event" clicked) -- swap in if using that instead:
+// const N8N_WEBHOOK_URL = "https://rochal10.app.n8n.cloud/webhook-test/leads-upload";
+// ---------------------------------------------------------------------------
+
+const uploadBtn = document.getElementById('uploadBtn');
+const uploadStatus = document.getElementById('uploadStatus');
+const refreshBtn = document.getElementById('refreshBtn');
+const queueStatus = document.getElementById('queueStatus');
+const queueTable = document.getElementById('queueTable');
+const queueBody = document.getElementById('queueBody');
+const queueEmpty = document.getElementById('queueEmpty');
+
+uploadBtn.addEventListener('click', async () => {
+  const fileInput = document.getElementById('csvFile');
+  const file = fileInput.files[0];
+  if (!file) { uploadStatus.textContent = 'Choose a CSV file first.'; uploadStatus.className = 'status-msg status-err'; return; }
+
+  uploadBtn.disabled = true;
+  uploadStatus.textContent = 'Reading file...';
+  uploadStatus.className = 'status-msg';
+
+  try {
+    const text = await file.text();
+    uploadStatus.textContent = 'Sending to n8n...';
+    const res = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csv: text }),
+    });
+    if (!res.ok) throw new Error(`n8n responded ${res.status}: ${await res.text()}`);
+    uploadStatus.textContent = `Sent. n8n responded ${res.status} -- check the workflow's execution log, then Refresh the queue below.`;
+    uploadStatus.className = 'status-msg status-ok';
+  } catch (e) {
+    uploadStatus.textContent = `Failed: ${e.message}. If this is a CORS error, set "Allowed Origins (CORS)" on the Webhook node to this page's origin, or "*" for testing.`;
+    uploadStatus.className = 'status-msg status-err';
+  } finally {
+    uploadBtn.disabled = false;
+  }
+});
+
+async function loadQueue() {
+  queueStatus.textContent = 'Loading...';
+  queueStatus.className = 'status-msg';
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/leads_scored?needs_human_review=eq.true&order=processed_at.desc&select=lead_id,name,company,tier,total_score,review_reason,summary,status`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      },
+    });
+    if (!res.ok) throw new Error(`Supabase responded ${res.status}: ${await res.text()}`);
+    const rows = await res.json();
+    renderQueue(rows);
+    queueStatus.textContent = `Loaded ${rows.length} row(s) needing review.`;
+    queueStatus.className = 'status-msg status-ok';
+  } catch (e) {
+    queueStatus.textContent = `Failed: ${e.message}. If this is a 401/permission error, check the RLS policies on leads_scored (see schema_v2.sql).`;
+    queueStatus.className = 'status-msg status-err';
+  }
+}
+
+function renderQueue(rows) {
+  queueBody.innerHTML = '';
+  if (!rows.length) {
+    queueTable.style.display = 'none';
+    queueEmpty.style.display = 'block';
+    queueEmpty.textContent = 'Nothing needs review right now.';
+    return;
+  }
+  queueTable.style.display = 'table';
+  queueEmpty.style.display = 'none';
+
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(r.lead_id)}<br><span style="color:#7a7a84">${escapeHtml(r.name || '')}</span></td>
+      <td>${escapeHtml(r.company || '-')}</td>
+      <td><span class="tier tier-${r.tier}">${escapeHtml(r.tier)} (${r.total_score})</span></td>
+      <td>${escapeHtml(r.review_reason || '')}</td>
+      <td>${escapeHtml(r.summary || '')}</td>
+      <td><button class="secondary resolve-btn" data-id="${escapeHtml(r.lead_id)}">Mark reviewed</button></td>
+    `;
+    queueBody.appendChild(tr);
+  });
+
+  document.querySelectorAll('.resolve-btn').forEach((btn) => {
+    btn.addEventListener('click', () => resolveRow(btn.dataset.id, btn));
+  });
+}
+
+async function resolveRow(leadId, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/leads_scored?lead_id=eq.${encodeURIComponent(leadId)}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({ needs_human_review: false, status: 'ok' }),
+    });
+    if (!res.ok) throw new Error(`Supabase responded ${res.status}: ${await res.text()}`);
+    loadQueue();
+  } catch (e) {
+    btn.textContent = 'Failed';
+    alert(`Could not resolve ${leadId}: ${e.message}`);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+refreshBtn.addEventListener('click', loadQueue);
+</script>
+
+</body>
+</html>

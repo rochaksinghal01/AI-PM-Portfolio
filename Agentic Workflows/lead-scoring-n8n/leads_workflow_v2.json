@@ -1,0 +1,618 @@
+{
+  "name": "Lead Scoring \u2014 v2 (Validator + Judge + Summarizer, Gemini)",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2000,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "read_file",
+      "name": "Read CSV File",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -1800,
+        200
+      ],
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "/data/leads_sample.csv",
+        "options": {}
+      }
+    },
+    {
+      "id": "extract_text",
+      "name": "Extract CSV Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -1600,
+        200
+      ],
+      "parameters": {
+        "operation": "text",
+        "binaryPropertyName": "data"
+      }
+    },
+    {
+      "id": "parse_csv",
+      "name": "Parse CSV (tolerant)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1400,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Tolerant CSV parser -- ragged rows repaired + flagged, never dropped.\nconst text = $input.first().json.data;\n\nfunction splitCsvLine(line) {\n  const fields = [];\n  let cur = '';\n  let inQuotes = false;\n  for (let i = 0; i < line.length; i++) {\n    const ch = line[i];\n    if (inQuotes) {\n      if (ch === '\"') { if (line[i + 1] === '\"') { cur += '\"'; i++; } else { inQuotes = false; } }\n      else { cur += ch; }\n    } else if (ch === '\"') { inQuotes = true; }\n    else if (ch === ',') { fields.push(cur); cur = ''; }\n    else { cur += ch; }\n  }\n  fields.push(cur);\n  return fields;\n}\n\nconst lines = text.split(/\\r\\n|\\n|\\r/).filter((l) => l.length > 0);\nif (lines.length === 0) return [];\n\nconst header = splitCsvLine(lines[0]).map((h) => h.trim());\nconst nExpected = header.length;\nconst results = [];\n\nfor (let i = 1; i < lines.length; i++) {\n  const flags = [];\n  let fields = splitCsvLine(lines[i]);\n  if (fields.every((f) => f.trim() === '')) continue;\n\n  if (fields.length < nExpected) {\n    flags.push(`structural: expected ${nExpected} columns, got ${fields.length} at line ${i + 1}`);\n    while (fields.length < nExpected) fields.push('');\n  } else if (fields.length > nExpected) {\n    const notesIdx = header.indexOf('raw_notes') >= 0 ? header.indexOf('raw_notes') : nExpected - 2;\n    const head = fields.slice(0, notesIdx);\n    const hasTailCol = nExpected - notesIdx - 1 === 1;\n    const tail = hasTailCol ? fields[fields.length - 1] : null;\n    const mergedNotes = fields.slice(notesIdx, fields.length - (hasTailCol ? 1 : 0)).join(',');\n    let repaired = [...head, mergedNotes];\n    if (tail !== null) repaired.push(tail);\n    while (repaired.length < nExpected) repaired.push('');\n    fields = repaired.slice(0, nExpected);\n    flags.push(`structural: expected ${nExpected} columns, got more at line ${i + 1} (auto-merged into raw_notes)`);\n  }\n\n  const row = {};\n  header.forEach((h, idx) => { row[h] = fields[idx] !== undefined ? fields[idx] : ''; });\n  row._line_no = i + 1;\n  row._ingest_flags = flags;\n  results.push({ json: row });\n}\nreturn results;"
+      }
+    },
+    {
+      "id": "clean_validate",
+      "name": "Clean & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\n// Deterministic cleaning + classification. LLM does judgment calls only --\n// this node does lookups: email format, free-mail-domain check, source rank,\n// cheap placeholder-name pre-check (Validator LLM still owns the final call).\n\nconst FREE_MAIL_DOMAINS = new Set([\"gmail.com\", \"yahoo.com\", \"outlook.com\", \"hotmail.com\", \"icloud.com\", \"aol.com\", \"protonmail.com\", \"proton.me\", \"mail.com\", \"zoho.com\", \"yandex.com\", \"live.com\", \"msn.com\", \"rediffmail.com\", \"gmx.com\", \"fastmail.com\"]);\nconst PLACEHOLDER_NAMES = new Set(['abc', 'xyz', 'zys', 'test', 'test test', 'n/a', 'na', 'asdf', 'xxx', '']);\nconst SOURCE_RANK = { referral: 2, event: 1, web: 0 };\n\nconst staticData = $getWorkflowStaticData('node');\nif (!staticData.seenEmails) staticData.seenEmails = {};\n\nconst row = $json;\nconst flags = [...(row._ingest_flags || [])];\n\nconst leadId = (row.lead_id || '').trim();\nconst name = (row.name || '').trim();\nconst email = (row.email || '').trim().toLowerCase();\nconst company = (row.company || '').trim();\nconst rawNotes = (row.raw_notes || '').trim();\nconst source = (row.source || '').trim().toLowerCase() || 'unknown';\n\nconst emailRe = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;\nconst emailValid = emailRe.test(email);\n\nlet emailType = 'blank';\nlet domain = null;\nif (emailValid) {\n  domain = email.split('@')[1];\n  emailType = FREE_MAIL_DOMAINS.has(domain) ? 'personal' : 'company';\n} else if (email) {\n  flags.push(`malformed email: '${email}'`);\n}\n\nif (!leadId) flags.push('missing lead_id');\nif (!company) flags.push('missing company');\nif (!rawNotes) flags.push('empty raw_notes');\n\nconst namePlaceholderSuspected = PLACEHOLDER_NAMES.has(name.toLowerCase());\nif (namePlaceholderSuspected) flags.push(`name looks like a placeholder: '${name}'`);\n\nif (emailValid) {\n  if (staticData.seenEmails[email]) {\n    flags.push(`possible duplicate of ${staticData.seenEmails[email]} (same email)`);\n  } else {\n    staticData.seenEmails[email] = leadId || `line ${row._line_no}`;\n  }\n}\n\nconst sourceRank = SOURCE_RANK.hasOwnProperty(source) ? SOURCE_RANK[source] : 0;\n\nreturn {\n  json: {\n    lead_id: leadId || `UNKNOWN-${row._line_no}`,\n    name: name || null,\n    name_placeholder_suspected: namePlaceholderSuspected,\n    email: email || null,\n    email_valid: emailValid,\n    email_type: emailType,          // company | personal | blank\n    domain,\n    company: company || null,\n    raw_notes: rawNotes || null,\n    source,\n    source_rank: sourceRank,        // referral=2, event=1, web/unknown=0\n    flags,\n  },\n};"
+      }
+    },
+    {
+      "id": "guardrail_clean",
+      "name": "Guardrail: Clean Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1000,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Guardrail: sanity-check Clean & Validate's output shape before it reaches the LLM.\nconst r = $json;\nconst problems = [];\nif (!r.lead_id) problems.push('missing lead_id after cleaning');\nif (!['company', 'personal', 'blank'].includes(r.email_type)) problems.push('email_type out of range');\nif (typeof r.source_rank !== 'number') problems.push('source_rank not numeric');\nreturn { json: { ...r, guardrail_clean_ok: problems.length === 0, guardrail_clean_problems: problems } };"
+      }
+    },
+    {
+      "id": "gemini_validator",
+      "name": "Google Gemini Chat Model (Validator)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        340
+      ],
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite"
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "REPLACE_WITH_YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini (AI Studio key)"
+        }
+      },
+      "notes": "Verified live: gemini-3.1-flash-lite supports structured outputs + function calling, free tier via Google AI Studio (ai.google.dev). Confirm the exact n8n Google Gemini node's credential/parameter names against your installed version -- LangChain node schemas change across n8n releases."
+    },
+    {
+      "id": "parser_validator",
+      "name": "Validator Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        -820,
+        60
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"required\": [\n    \"name_valid\",\n    \"company_size_tier\",\n    \"intent\",\n    \"clarity\",\n    \"repeat_customer\"\n  ],\n  \"properties\": {\n    \"name_valid\": {\n      \"type\": \"boolean\"\n    },\n    \"name_flag_reason\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    },\n    \"company_size_tier\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"small\",\n        \"medium\",\n        \"large\",\n        \"unknown\"\n      ]\n    },\n    \"company_networth_estimate\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    },\n    \"intent\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"blank\",\n        \"gibberish\",\n        \"browsing\",\n        \"inquiry\",\n        \"demo\",\n        \"complaint\",\n        \"order\"\n      ]\n    },\n    \"clarity\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"yes\",\n        \"no\"\n      ]\n    },\n    \"repeat_customer\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"yes\",\n        \"no\",\n        \"unclear\"\n      ]\n    }\n  }\n}"
+      }
+    },
+    {
+      "id": "validator_chain",
+      "name": "Validator Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        -800,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are validating and classifying one inbound sales lead. Use ONLY the information given -- do not invent facts about the specific person or company beyond reasonable, clearly-labeled estimates.\n\nName: {{ $json.name || '(none)' }}\nEmail type (pre-computed, for context only): {{ $json.email_type }}\nCompany: {{ $json.company || '(none)' }}\nRaw notes: \"\"\"{{ $json.raw_notes || '(no notes provided)' }}\"\"\"\n\nClassify:\n1. name_valid: is this a plausible real Indian person's name (not a placeholder like ABC, XYZ, Test)?\n2. name_flag_reason: if name_valid is false, one short phrase why.\n3. company_size_tier: your best estimate given the company name alone -- small, medium, large, or unknown if you don't recognize the company or have no basis to guess.\n4. company_networth_estimate: one short phrase, or null if unknown -- always caveat this is an estimate, not verified data.\n5. intent: exactly one of blank, gibberish, browsing, inquiry, demo, complaint, order (see rubric: blank=no notes, gibberish=unreadable, browsing=just looking, inquiry=asking how to get in touch, demo=wants a meeting/demo, complaint=feedback or complaint or follow-up, order=ready to place an order).\n6. clarity: yes or no -- are the notes clear and unambiguous?\n7. repeat_customer: yes, no, or unclear -- does the lead mention being an existing/returning customer?"
+      }
+    },
+    {
+      "id": "guardrail_validator",
+      "name": "Guardrail: Validator Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Guardrail: check the Validator LLM's structured output is actually usable.\n// If the parser failed or returned something out of range, flag rather than crash.\nconst lead = $('Guardrail: Clean Check').item.json;\nconst out = $json.output || $json; // structured output parser puts result under `output` in most n8n versions\nconst problems = [];\n\nconst validIntents = ['blank', 'gibberish', 'browsing', 'inquiry', 'demo', 'complaint', 'order'];\nconst intent = (out.intent || '').toLowerCase();\nif (!validIntents.includes(intent)) problems.push(`intent '${intent}' not in allowed set`);\n\nconst clarity = (out.clarity || '').toLowerCase();\nif (!['yes', 'no'].includes(clarity)) problems.push(`clarity '${clarity}' not yes/no`);\n\nconst repeatCustomer = (out.repeat_customer || 'unclear').toLowerCase();\n\nreturn {\n  json: {\n    ...lead,\n    validator_ok: problems.length === 0,\n    validator_problems: problems,\n    name_valid: problems.length === 0 ? !!out.name_valid : !lead.name_placeholder_suspected,\n    name_flag_reason: out.name_flag_reason || null,\n    company_size_tier: out.company_size_tier || 'unknown',\n    company_networth_estimate: out.company_networth_estimate || null,\n    intent: validIntents.includes(intent) ? intent : 'blank',\n    clarity: ['yes', 'no'].includes(clarity) ? clarity : 'no',\n    repeat_customer: repeatCustomer,\n  },\n};"
+      }
+    },
+    {
+      "id": "score_tier",
+      "name": "Score & Tier",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Deterministic scoring matrix -- the priority decision is a rule, not an LLM guess.\nconst r = $json;\n\nconst INTENT_POINTS = { blank: 0, gibberish: 1, browsing: 2, inquiry: 3, demo: 4, complaint: 5, order: 6 };\nconst EMAIL_POINTS = { company: 2, personal: 0, blank: -1 };\nconst SIZE_BONUS = { large: 2, medium: 1, small: 0, unknown: 0 };\n\nlet intentPoints = INTENT_POINTS.hasOwnProperty(r.intent) ? INTENT_POINTS[r.intent] : 0;\nif (r.clarity === 'no') intentPoints = Math.min(intentPoints, 4); // unclear notes cap the score\n\nconst emailPoints = EMAIL_POINTS.hasOwnProperty(r.email_type) ? EMAIL_POINTS[r.email_type] : 0;\nconst companyPoints = (r.company ? 1 : 0) + (SIZE_BONUS.hasOwnProperty(r.company_size_tier) ? SIZE_BONUS[r.company_size_tier] : 0);\nconst sourcePoints = typeof r.source_rank === 'number' ? r.source_rank : 0;\nconst repeatBonus = r.repeat_customer === 'yes' ? 1 : 0;\n\nconst totalScore = intentPoints + emailPoints + companyPoints + sourcePoints + repeatBonus;\nconst tier = totalScore >= 9 ? 'Hot' : totalScore >= 4 ? 'Warm' : 'Cold';\n\nconst reasons = [];\nif (tier === 'Cold') reasons.push('low total score');\nif (r.clarity === 'no') reasons.push('low clarity in raw_notes');\nif (r.name_valid === false) reasons.push('name failed validation');\nif (r.email_type === 'blank' && !r.company) reasons.push('no email and no company -- data insufficient');\nif (r.guardrail_clean_ok === false) reasons.push('ingestion guardrail failed');\nif (r.validator_ok === false) reasons.push('validator guardrail failed');\n\nreturn {\n  json: {\n    ...r,\n    intent_points: intentPoints,\n    email_points: emailPoints,\n    company_points: companyPoints,\n    source_points: sourcePoints,\n    repeat_bonus: repeatBonus,\n    total_score: totalScore,\n    tier,\n    needs_judge_check: reasons.length > 0,\n    needs_judge_reasons: reasons,\n  },\n};"
+      }
+    },
+    {
+      "id": "if_needs_judge",
+      "name": "IF: Needs Judge?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.needs_judge_check }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "gemini_judge",
+      "name": "Google Gemini Chat Model (Judge)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        0,
+        60
+      ],
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite"
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "REPLACE_WITH_YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini (AI Studio key)"
+        }
+      },
+      "notes": "Verified live: gemini-3.1-flash-lite supports structured outputs + function calling, free tier via Google AI Studio (ai.google.dev). Confirm the exact n8n Google Gemini node's credential/parameter names against your installed version -- LangChain node schemas change across n8n releases."
+    },
+    {
+      "id": "parser_judge",
+      "name": "Judge Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -100
+      ],
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"required\": [\n    \"needs_human_review\",\n    \"review_reason\"\n  ],\n  \"properties\": {\n    \"needs_human_review\": {\n      \"type\": \"boolean\"\n    },\n    \"review_reason\": {\n      \"type\": \"string\"\n    }\n  }\n}"
+      }
+    },
+    {
+      "id": "judge_chain",
+      "name": "Judge Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        20,
+        40
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "promptType": "define",
+        "text": "=A lead scoring pipeline flagged this lead as needing a human-review decision. Given the reasons below, decide whether a human should actually look at it before it's acted on.\n\nLead: {{ $json.name || '(no name)' }} at {{ $json.company || '(no company)' }}\nNotes: \"\"\"{{ $json.raw_notes || '(none)' }}\"\"\"\nComputed tier: {{ $json.tier }} (score {{ $json.total_score }})\nIntent: {{ $json.intent }}, clarity: {{ $json.clarity }}\nFlagged because: {{ $json.needs_judge_reasons.join(', ') }}\n\nReturn needs_human_review (true/false) and a one-phrase review_reason."
+      }
+    },
+    {
+      "id": "guardrail_judge",
+      "name": "Guardrail: Judge Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        40
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Guardrail after the Judge chain: fall back safely if the judge call/parse failed.\nconst lead = $('Score & Tier').item.json;\nconst out = $json.output || $json;\nconst needsReview = typeof out.needs_human_review === 'boolean' ? out.needs_human_review : true; // fail safe: unclear -> review\nreturn {\n  json: {\n    ...lead,\n    judge_ran: true,\n    needs_human_review: needsReview,\n    review_reason: out.review_reason || 'judge output unparseable -- defaulted to review',\n    status: needsReview ? 'pending_review' : (lead.tier === 'Cold' ? 'flagged' : 'ok'),\n  },\n};"
+      }
+    },
+    {
+      "id": "no_judge_passthrough",
+      "name": "No Judge Needed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        340
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// False branch of the \"needs judge?\" IF -- no judge call needed, pass through as-is.\nconst lead = $json;\nreturn {\n  json: {\n    ...lead,\n    judge_ran: false,\n    needs_human_review: false,\n    review_reason: null,\n    status: 'ok',\n  },\n};"
+      }
+    },
+    {
+      "id": "merge_judge",
+      "name": "Merge Judge Branch",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        420,
+        200
+      ],
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      }
+    },
+    {
+      "id": "gemini_summarizer",
+      "name": "Google Gemini Chat Model (Summarizer)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        620,
+        340
+      ],
+      "parameters": {
+        "modelName": "models/gemini-3.1-flash-lite"
+      },
+      "credentials": {
+        "googlePalmApi": {
+          "id": "REPLACE_WITH_YOUR_GEMINI_CREDENTIAL_ID",
+          "name": "Google Gemini (AI Studio key)"
+        }
+      },
+      "notes": "Verified live: gemini-3.1-flash-lite supports structured outputs + function calling, free tier via Google AI Studio (ai.google.dev). Confirm the exact n8n Google Gemini node's credential/parameter names against your installed version -- LangChain node schemas change across n8n releases."
+    },
+    {
+      "id": "summarizer_chain",
+      "name": "Summarizer Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        640,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write exactly one sentence (under 25 words) summarizing this lead for a salesperson triaging a queue. Explicitly reference the intent, the clarity of the notes, and the lead source.\n\nName: {{ $json.name || '(none)' }}\nCompany: {{ $json.company || '(none)' }}\nNotes: \"\"\"{{ $json.raw_notes || '(none)' }}\"\"\"\nIntent: {{ $json.intent }} | Clarity: {{ $json.clarity }} | Source: {{ $json.source }} | Tier: {{ $json.tier }}"
+      }
+    },
+    {
+      "id": "guardrail_summary",
+      "name": "Guardrail: Summary Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Guardrail on the Summarizer's output: non-empty, capped length, mentions a real signal.\nconst lead = $('Merge Judge Branch').item.json;\nconst out = $json.output || $json;\nlet summary = (out.summary || out.text || '').toString().trim();\nconst problems = [];\nif (!summary) { problems.push('empty summary'); summary = `${lead.tier} lead: intent=${lead.intent}, clarity=${lead.clarity}, source=${lead.source}.`; }\nif (summary.length > 300) { problems.push('summary too long, truncated'); summary = summary.slice(0, 297) + '...'; }\n\nreturn { json: { ...lead, summary, guardrail_summary_ok: problems.length === 0, guardrail_summary_problems: problems } };"
+      }
+    },
+    {
+      "id": "postgres_upsert",
+      "name": "Upsert into leads_enriched",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1040,
+        200
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "notes": "Works against Supabase (managed Postgres) or self-hosted. Run schema_v2.sql once first.",
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase / Postgres"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leads_scored\n  (lead_id, name, name_valid, email, email_type, domain, company, company_size_tier, company_networth_estimate,\n   raw_notes, source, intent, clarity, repeat_customer, total_score, tier, status, needs_human_review, review_reason, summary)\nVALUES\n  ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)\nON CONFLICT (lead_id) DO UPDATE SET\n  name=EXCLUDED.name, name_valid=EXCLUDED.name_valid, email=EXCLUDED.email, email_type=EXCLUDED.email_type,\n  domain=EXCLUDED.domain, company=EXCLUDED.company, company_size_tier=EXCLUDED.company_size_tier,\n  company_networth_estimate=EXCLUDED.company_networth_estimate, raw_notes=EXCLUDED.raw_notes, source=EXCLUDED.source,\n  intent=EXCLUDED.intent, clarity=EXCLUDED.clarity, repeat_customer=EXCLUDED.repeat_customer,\n  total_score=EXCLUDED.total_score, tier=EXCLUDED.tier, status=EXCLUDED.status,\n  needs_human_review=EXCLUDED.needs_human_review, review_reason=EXCLUDED.review_reason, summary=EXCLUDED.summary;",
+        "options": {
+          "queryReplacement": "={{ [$json.lead_id, $json.name, $json.name_valid, $json.email, $json.email_type, $json.domain, $json.company, $json.company_size_tier, $json.company_networth_estimate, $json.raw_notes, $json.source, $json.intent, $json.clarity, $json.repeat_customer, $json.total_score, $json.tier, $json.status, $json.needs_human_review, $json.review_reason, $json.summary] }}"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read CSV File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV File": {
+      "main": [
+        [
+          {
+            "node": "Extract CSV Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract CSV Text": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV (tolerant)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV (tolerant)": {
+      "main": [
+        [
+          {
+            "node": "Clean & Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean & Validate": {
+      "main": [
+        [
+          {
+            "node": "Guardrail: Clean Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardrail: Clean Check": {
+      "main": [
+        [
+          {
+            "node": "Validator Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model (Validator)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Validator Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validator Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Validator Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validator Chain": {
+      "main": [
+        [
+          {
+            "node": "Guardrail: Validator Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardrail: Validator Check": {
+      "main": [
+        [
+          {
+            "node": "Score & Tier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score & Tier": {
+      "main": [
+        [
+          {
+            "node": "IF: Needs Judge?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Needs Judge?": {
+      "main": [
+        [
+          {
+            "node": "Judge Chain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Judge Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model (Judge)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Judge Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Judge Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Judge Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Judge Chain": {
+      "main": [
+        [
+          {
+            "node": "Guardrail: Judge Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardrail: Judge Check": {
+      "main": [
+        [
+          {
+            "node": "Merge Judge Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Judge Needed": {
+      "main": [
+        [
+          {
+            "node": "Merge Judge Branch",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Judge Branch": {
+      "main": [
+        [
+          {
+            "node": "Summarizer Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model (Summarizer)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Summarizer Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarizer Chain": {
+      "main": [
+        [
+          {
+            "node": "Guardrail: Summary Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardrail: Summary Check": {
+      "main": [
+        [
+          {
+            "node": "Upsert into leads_enriched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "instructions": "Hand-authored, not yet import-tested on a live n8n instance. Highest-risk spots to check first: (1) the Google Gemini Chat Model node's exact credential type name and 'modelName' parameter key -- LangChain node schemas shift across n8n versions; (2) the IF node's two output indices (0=true/1=false) match your n8n version's convention; (3) the Merge node's 'combine/combineAll' mode actually reunites the two branches per-item the way you expect -- test with a 2-3 row file first and inspect each branch's output before trusting it on the full sample. Set the Google Gemini credential (AI Studio API key) and the Postgres/Supabase credential before running."
+  }
+}
