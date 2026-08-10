@@ -1,0 +1,103 @@
+{
+  "name": "Knoxx — WF01 Account Intake Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "knoxx-account-research",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "wf01-webhook",
+      "name": "Account Research Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-700, 100],
+      "webhookId": "knoxx-wf01-account-research"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst required = ['run_id','account_id','website_url'];\nconst missing = required.filter(key => body[key] === undefined || body[key] === null || String(body[key]).trim() === '');\nif (missing.length) throw new Error(`Missing required fields: ${missing.join(', ')}`);\nconst expected = $vars.N8N_WEBHOOK_SECRET;\nconst supplied = $json.headers?.['x-workflow-secret'];\nif (!expected || supplied !== expected) throw new Error('Invalid workflow secret');\nconst rawWebsite = String(body.website_url).trim().replace(/^[\\\"'“”‘’]+|[\\\"'“”‘’]+$/g, '');\nconst declaredScheme = rawWebsite.match(/^([a-z][a-z0-9+.-]*):/i)?.[1]?.toLowerCase();\nif (declaredScheme && !['http','https'].includes(declaredScheme)) throw new Error('Unsupported URL scheme');\nconst candidate = declaredScheme ? rawWebsite : `https://${rawWebsite.replace(/^\\/\\//, '')}`;\nif (/\\s/.test(candidate)) throw new Error('website_url cannot contain spaces');\nconst parsed = candidate.match(/^(https?):\\/\\/([^\\/?#]+)([^?#]*)(?:\\?([^#]*))?(?:#.*)?$/i);\nif (!parsed) throw new Error(`website_url could not be parsed: ${rawWebsite}`);\nconst protocol = parsed[1].toLowerCase();\nconst authority = parsed[2];\nif (authority.includes('@')) throw new Error('Credentials are not allowed in website_url');\nconst authorityParts = authority.split(':');\nif (authorityParts.length > 2) throw new Error('Invalid website host');\nconst rawHost = authorityParts[0].toLowerCase().replace(/\\.$/, '');\nconst port = authorityParts[1] || '';\nif (port && !/^\\d{1,5}$/.test(port)) throw new Error('Invalid website port');\nconst domain = rawHost.replace(/^www\\./, '');\nconst domainPattern = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;\nif (!domainPattern.test(domain)) throw new Error(`Invalid canonical domain: ${domain}`);\nconst pathname = parsed[3] || '/';\nconst queryParts = (parsed[4] || '').split('&').filter(Boolean).filter(part => {\n  const encodedKey = part.split('=', 1)[0].replace(/\\+/g, ' ');\n  let key = encodedKey;\n  try { key = decodeURIComponent(encodedKey); } catch {}\n  return !/^(utm_|gclid|fbclid)/i.test(key);\n});\nconst query = queryParts.length ? `?${queryParts.join('&')}` : '';\nconst portSuffix = port ? `:${port}` : '';\nconst websiteUrl = `${protocol}://${domain}${portSuffix}${pathname}${query}`;\nreturn [{json:{...body,website_url:websiteUrl,domain,workflow_version:'wf01-v3',received_at:new Date().toISOString()}}];"
+      },
+      "id": "wf01-validate",
+      "name": "Validate & Canonicalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-460, 100]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update research_runs set status='running', started_at=coalesce(started_at,now()), provider_versions=provider_versions || '{\"intake\":\"wf01-v3\"}'::jsonb where id=$1 and account_id=$2; update accounts set stage='researching', lifecycle=$3 where id=$2; select $1::uuid as run_id,$2::uuid as account_id,$4::text as website_url,$5::text as domain;",
+        "options": {
+          "queryReplacement": "={{ [$json.run_id,$json.account_id,$json.lifecycle === 'existing' ? 'existing' : 'new',$json.website_url,$json.domain] }}"
+        }
+      },
+      "id": "wf01-mark-running",
+      "name": "Mark Run Running",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-210, 100],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_WITH_SUPABASE_POSTGRES_CREDENTIAL_ID",
+          "name": "Supabase Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.KNOXX_WF02_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Workflow-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({run_id:$json.run_id,account_id:$json.account_id,website_url:$json.website_url,domain:$json.domain,company_name:$('Validate & Canonicalize').first().json.company_name || null,notes:$('Validate & Canonicalize').first().json.notes || null}) }}",
+        "options": { "timeout": 600000 }
+      },
+      "id": "wf01-start-wf02",
+      "name": "Start Evidence & Fit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [40, 100],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const intake = $('Validate & Canonicalize').first().json;\nconst failed = Boolean($json.error || Number($json.statusCode) >= 400);\nconst errorValue = $json.message || $json.error || null;\nconst errorMessage = typeof errorValue === 'string' ? errorValue : errorValue ? JSON.stringify(errorValue) : 'WF02 request failed';\nreturn [{json:{run_id:intake.run_id,account_id:intake.account_id,status:failed?'failed_partial':'researching',next_workflow:'WF02',error:failed?errorMessage:null}}];"
+      },
+      "id": "wf01-response",
+      "name": "Return Intake Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [290, 100]
+    }
+  ],
+  "connections": {
+    "Account Research Webhook": { "main": [[{ "node": "Validate & Canonicalize", "type": "main", "index": 0 }]] },
+    "Validate & Canonicalize": { "main": [[{ "node": "Mark Run Running", "type": "main", "index": 0 }]] },
+    "Mark Run Running": { "main": [[{ "node": "Start Evidence & Fit", "type": "main", "index": 0 }]] },
+    "Start Evidence & Fit": { "main": [[{ "node": "Return Intake Status", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Australia/Sydney",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "executionTimeout": 660
+  },
+  "versionId": "6c1cafcb-b895-4bcb-90a5-df8f5af8a124",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

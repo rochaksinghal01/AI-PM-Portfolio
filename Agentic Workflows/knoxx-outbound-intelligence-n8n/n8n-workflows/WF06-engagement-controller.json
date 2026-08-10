@@ -1,0 +1,306 @@
+{
+  "name": "Knoxx — WF06 Engagement & Pipeline Controller",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "knoxx-outreach-event", "responseMode": "lastNode", "options": {} },
+      "id": "wf06-event-webhook",
+      "name": "Normalized Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1260, 30],
+      "webhookId": "knoxx-wf06-event"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body=$json.body||$json; const allowed=['cta_click','positive_reply','negative_reply','negative_org_reply','meeting_booked','manual_engaged','opportunity_created','unsubscribe','hard_bounce','out_of_office']; for(const key of ['account_id','event_type','idempotency_key']) if(!body[key]) throw new Error(`Missing ${key}`); if(!allowed.includes(body.event_type)) throw new Error('Unsupported event type'); if($vars.N8N_WEBHOOK_SECRET && $json.headers?.['x-workflow-secret']!==$vars.N8N_WEBHOOK_SECRET) throw new Error('Invalid workflow secret'); return [{json:{...body,provider:body.provider||'n8n'}}];"
+      },
+      "id": "wf06-validate-event",
+      "name": "Validate Normalized Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1010, 30]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SUPABASE_FUNCTIONS_URL + '/outreach-event' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-Outreach-Secret", "value": "={{ $vars.OUTREACH_EVENT_SECRET }}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf06-apply-direct",
+      "name": "Apply Deterministic Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-760, 30],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "simple": true,
+        "filters": { "labelIds": ["INBOX"] },
+        "options": {}
+      },
+      "id": "wf06-gmail-trigger",
+      "name": "Gmail Reply Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [-1260, 300],
+      "credentials": { "gmailOAuth2": { "id": "REPLACE_WITH_GMAIL_TEST_CREDENTIAL_ID", "name": "Gmail Test Sender" } },
+      "disabled": true,
+      "notes": "Enable only after the safe test inbox has been verified."
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawFrom=$json.from?.value?.[0]?.address||$json.from||$json.From||$json.headers?.from||''; const match=String(rawFrom).match(/<([^>]+)>/)||String(rawFrom).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i); const from=String(match?.[1]||match?.[0]||rawFrom).trim().toLowerCase(); const subject=String($json.subject||$json.Subject||$json.headers?.subject||''); const body=String($json.textPlain||$json.text||$json.snippet||$json.body||'').slice(0,12000); const provider_id=String($json.id||$json.messageId||$json.message_id||`${from}:${subject}`); if(!from||!from.includes('@')) throw new Error('Reply sender unavailable'); return [{json:{from_email:from,subject,body,provider_id}}];"
+      },
+      "id": "wf06-extract-reply",
+      "name": "Extract Bounded Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1010, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select c.account_id,c.id as contact_id,$2::text as subject,$3::text as body,$4::text as provider_id,c.full_name,c.title from contacts c where lower(c.work_email)=lower($1) and c.state in ('active','queued','shortlisted') order by c.updated_at desc limit 1;",
+        "options": { "queryReplacement": "={{ [$json.from_email,$json.subject,$json.body,$json.provider_id] }}" }
+      },
+      "id": "wf06-lookup-contact",
+      "name": "Resolve Reply Contact",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-760, 300],
+      "credentials": { "postgres": { "id": "REPLACE_WITH_SUPABASE_POSTGRES_CREDENTIAL_ID", "name": "Supabase Postgres" } }
+    },
+    {
+      "parameters": {
+        "source": "dataTable",
+        "dataTableId": { "__rl": true, "value": "REPLACE_WITH_REPLY_EVAL_DATA_TABLE_ID", "mode": "id" },
+        "limitRows": true,
+        "maxRows": 30
+      },
+      "id": "wf06-eval-trigger",
+      "name": "Evaluation Trigger",
+      "type": "n8n-nodes-base.evaluationTrigger",
+      "typeVersion": 4.7,
+      "position": [-1260, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{account_id:$json.account_id||'eval-account',contact_id:$json.contact_id||'eval-contact',subject:$json.subject||'',body:$json.body,provider_id:`eval-${$json.row_number}`,expected_event:$json.expected_event,evaluation_mode:true}}];"
+      },
+      "id": "wf06-eval-adapter",
+      "name": "Build Reply Evaluation Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1010, 560]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,subject:String($json.subject||'').slice(0,500),body:String($json.body||'').slice(0,12000),expected_event:$json.expected_event||null}}];"
+      },
+      "id": "wf06-prepare-reply",
+      "name": "Prepare Reply Classifier Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-500, 430]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Classify this B2B email reply into the fixed event taxonomy.\nSubject: {{ $json.subject }}\nBody: {{ $json.body }}\nReturn structured output only.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Classify only explicit intent. positive_reply means genuine interest or request for next steps. negative_reply is a personal decline; negative_org_reply explicitly asks not to contact the organization. out_of_office requires an automatic absence response and should extract a return date when present. Anything unclear, unrelated, forwarded, automated but not OOO, or low confidence is manual_review. Never infer positivity from a click or signature.",
+          "enableStreaming": false
+        }
+      },
+      "id": "wf06-classifier",
+      "name": "Reply Classification Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [-240, 430]
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-5.6-luna", "mode": "id" },
+        "responsesApiEnabled": true,
+        "options": { "reasoningEffort": "low", "temperature": 0, "maxRetries": 2, "timeout": 45000 }
+      },
+      "id": "wf06-model",
+      "name": "GPT 5.6 Luna Classifier Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-390, 670],
+      "credentials": { "openAiApi": { "id": "REPLACE_WITH_OPENAI_CREDENTIAL_ID", "name": "OpenAI API" } }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"required\":[\"event_type\",\"confidence\",\"rationale\"],\"properties\":{\"event_type\":{\"type\":\"string\",\"enum\":[\"positive_reply\",\"negative_reply\",\"negative_org_reply\",\"out_of_office\",\"manual_review\"]},\"confidence\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1},\"return_date\":{\"type\":[\"string\",\"null\"]},\"rationale\":{\"type\":\"string\"}}}"
+      },
+      "id": "wf06-parser",
+      "name": "Reply Classification Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [-120, 670]
+    },
+    {
+      "parameters": {
+        "jsCode": "const context=$('Prepare Reply Classifier Input').item.json; let result; try{const raw=$json.output??$json; result=typeof raw==='string'?JSON.parse(raw):raw;}catch{result={event_type:'manual_review',confidence:0,rationale:'Invalid classifier JSON',return_date:null};} const confidence=Math.max(0,Math.min(1,Number(result.confidence)||0)); const event_type=confidence>=0.8?result.event_type:'manual_review'; return [{json:{...context,...result,event_type,confidence,should_apply:event_type!=='manual_review',provider:'gmail',idempotency_key:`gmail:${context.provider_id}`,payload:{subject:context.subject,rationale:result.rationale,return_date:result.return_date||null}}}];"
+      },
+      "id": "wf06-guardrail",
+      "name": "Classifier Confidence Guardrail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [40, 430]
+    },
+    {
+      "parameters": { "operation": "checkIfEvaluating" },
+      "id": "wf06-check-eval",
+      "name": "Check If Evaluating",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [280, 430]
+    },
+    {
+      "parameters": {
+        "operation": "setMetrics",
+        "metric": "correctness",
+        "expectedAnswer": "={{ $json.expected_event }}",
+        "actualAnswer": "={{ $json.event_type }}",
+        "options": { "metricName": "Reply classification correctness" }
+      },
+      "id": "wf06-judge",
+      "name": "LLM Judge Reply Classifier",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [530, 300]
+    },
+    {
+      "parameters": { "modelName": "models/gemini-3.6-flash", "options": { "temperature": 0 } },
+      "id": "wf06-gemini",
+      "name": "Gemini 3.6 Independent Judge",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [520, 560],
+      "credentials": { "googlePalmApi": { "id": "REPLACE_WITH_GEMINI_CREDENTIAL_ID", "name": "Google Gemini API" } }
+    },
+    {
+      "parameters": {
+        "operation": "setMetrics",
+        "metric": "customMetrics",
+        "metrics": { "assignments": [
+            { "id": "r1", "name": "event_match", "value": "={{ $('Classifier Confidence Guardrail').first().json.event_type === $('Classifier Confidence Guardrail').first().json.expected_event ? 1 : 0 }}", "type": "number" },
+            { "id": "r2", "name": "high_confidence_or_review", "value": "={{ $('Classifier Confidence Guardrail').first().json.confidence >= 0.8 || $('Classifier Confidence Guardrail').first().json.event_type === 'manual_review' ? 1 : 0 }}", "type": "number" }
+        ] }
+      },
+      "id": "wf06-metrics",
+      "name": "Deterministic Reply Metrics",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [770, 300]
+    },
+    {
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 }, "conditions": [{ "id": "apply", "leftValue": "={{ $json.should_apply }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }], "combinator": "and" },
+        "options": {}
+      },
+      "id": "wf06-if-apply",
+      "name": "Can Apply Automatically?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [530, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.SUPABASE_FUNCTIONS_URL + '/outreach-event' }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-Outreach-Secret", "value": "={{ $vars.OUTREACH_EVENT_SECRET }}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({account_id:$json.account_id,contact_id:$json.contact_id,event_type:$json.event_type,idempotency_key:$json.idempotency_key,provider:$json.provider,payload:$json.payload}) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf06-apply-classified",
+      "name": "Apply Classified Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [790, 660],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into audit_log(entity_type,entity_id,action,after_state) values('contact',$1,'reply_manual_review',$2::jsonb); select 'manual_review' as status,$1::text as contact_id;",
+        "options": { "queryReplacement": "={{ [$json.contact_id,JSON.stringify({subject:$json.subject,event_type:$json.event_type,confidence:$json.confidence,rationale:$json.rationale})] }}" }
+      },
+      "id": "wf06-manual-review",
+      "name": "Queue Manual Reply Review",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [790, 820],
+      "credentials": { "postgres": { "id": "REPLACE_WITH_SUPABASE_POSTGRES_CREDENTIAL_ID", "name": "Supabase Postgres" } }
+    },
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] }
+      },
+      "id": "wf06-resume-schedule",
+      "name": "Hourly OOO Resume Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-1260, 930]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update contacts c set state='shortlisted',paused_until=null,updated_at=now() where c.state='paused' and c.paused_until is not null and c.paused_until<=now() and not exists(select 1 from suppression_entries s where s.active and (s.contact_id=c.id or s.account_id=c.account_id)) returning c.id as contact_id,c.account_id,'resumed_after_out_of_office' as status;",
+        "options": {}
+      },
+      "id": "wf06-resume-ooo",
+      "name": "Resume Returned OOO Contacts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [-1010, 930],
+      "credentials": { "postgres": { "id": "REPLACE_WITH_SUPABASE_POSTGRES_CREDENTIAL_ID", "name": "Supabase Postgres" } }
+    }
+  ],
+  "connections": {
+    "Normalized Event Webhook": { "main": [[{ "node": "Validate Normalized Event", "type": "main", "index": 0 }]] },
+    "Validate Normalized Event": { "main": [[{ "node": "Apply Deterministic Event", "type": "main", "index": 0 }]] },
+    "Gmail Reply Trigger": { "main": [[{ "node": "Extract Bounded Reply", "type": "main", "index": 0 }]] },
+    "Extract Bounded Reply": { "main": [[{ "node": "Resolve Reply Contact", "type": "main", "index": 0 }]] },
+    "Resolve Reply Contact": { "main": [[{ "node": "Prepare Reply Classifier Input", "type": "main", "index": 0 }]] },
+    "Evaluation Trigger": { "main": [[{ "node": "Build Reply Evaluation Input", "type": "main", "index": 0 }]] },
+    "Build Reply Evaluation Input": { "main": [[{ "node": "Prepare Reply Classifier Input", "type": "main", "index": 0 }]] },
+    "Prepare Reply Classifier Input": { "main": [[{ "node": "Reply Classification Chain", "type": "main", "index": 0 }]] },
+    "GPT 5.6 Luna Classifier Model": { "ai_languageModel": [[{ "node": "Reply Classification Chain", "type": "ai_languageModel", "index": 0 }]] },
+    "Reply Classification Schema": { "ai_outputParser": [[{ "node": "Reply Classification Chain", "type": "ai_outputParser", "index": 0 }]] },
+    "Reply Classification Chain": { "main": [[{ "node": "Classifier Confidence Guardrail", "type": "main", "index": 0 }]] },
+    "Classifier Confidence Guardrail": { "main": [[{ "node": "Check If Evaluating", "type": "main", "index": 0 }]] },
+    "Check If Evaluating": { "main": [[{ "node": "LLM Judge Reply Classifier", "type": "main", "index": 0 }],[{ "node": "Can Apply Automatically?", "type": "main", "index": 0 }]] },
+    "Gemini 3.6 Independent Judge": { "ai_languageModel": [[{ "node": "LLM Judge Reply Classifier", "type": "ai_languageModel", "index": 0 }]] },
+    "LLM Judge Reply Classifier": { "main": [[{ "node": "Deterministic Reply Metrics", "type": "main", "index": 0 }]] },
+    "Can Apply Automatically?": { "main": [[{ "node": "Apply Classified Event", "type": "main", "index": 0 }],[{ "node": "Queue Manual Reply Review", "type": "main", "index": 0 }]] },
+    "Hourly OOO Resume Check": { "main": [[{ "node": "Resume Returned OOO Contacts", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "Australia/Sydney", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "all", "executionTimeout": 300 },
+  "versionId": "a2dce0d9-6b9d-4d76-81ab-990b19fcab13",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

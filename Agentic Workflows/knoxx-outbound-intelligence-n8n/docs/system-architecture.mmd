@@ -1,0 +1,30 @@
+flowchart LR
+  classDef human fill:#FFF4D6,stroke:#B98422,color:#392D17
+  classDef app fill:#E9F1EA,stroke:#4B7659,color:#1C3825
+  classDef orchestration fill:#EEEAF8,stroke:#6657A4,color:#30275A
+  classDef provider fill:#E7F2F5,stroke:#3F7381,color:#173841
+  classDef data fill:#F2F2EC,stroke:#767A71,color:#2D302A
+  classDef safety fill:#FBE8E6,stroke:#A9534D,color:#4B211E
+
+  User[Sales operator]:::human --> UI[Lovable React app]:::app
+  UI --> Edge[Supabase Auth and Edge Functions]:::app
+  Edge --> DB[(Supabase Postgres and RLS)]:::data
+  Edge --> Intake[WF01 Account intake]:::orchestration
+  Intake --> Research[WF02 Evidence and Fit Agent]:::orchestration
+  Research --> Firecrawl[Firecrawl web and PDF]:::provider
+  Research --> AccountAgent[Account Intelligence Agent]:::provider
+  AccountAgent --> Catalog[Knoxx catalogue tool]:::data
+  Research --> Rules[Deterministic scoring and ranges]:::safety
+  Rules --> Committee[WF04 Buying Committee Agent]:::orchestration
+  Committee --> Apollo[Apollo search and enrichment]:::provider
+  Committee --> Outreach[WF05 Outreach Agent]:::orchestration
+  Outreach --> Approval{Human approval}:::human
+  Approval --> SafeSend[Allowlisted Gmail adapter]:::safety
+  SafeSend --> Events[WF06 Engagement controller]:::orchestration
+  Events --> StopRules[Idempotent stop rules]:::safety
+  StopRules --> DB
+  DB --> UI
+  Research -.-> Eval[Native n8n Evaluations]:::orchestration
+  Committee -.-> Eval
+  Outreach -.-> Eval
+  Eval --> Judge[Independent Gemini judge]:::provider

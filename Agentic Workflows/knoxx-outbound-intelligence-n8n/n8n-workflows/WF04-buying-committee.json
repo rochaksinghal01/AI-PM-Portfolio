@@ -1,0 +1,337 @@
+{
+  "name": "Knoxx — WF04 Buying Committee Agent",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "knoxx-buying-committee", "responseMode": "lastNode", "options": {} },
+      "id": "wf04-webhook",
+      "name": "Production Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1320, 40],
+      "webhookId": "knoxx-wf04-buying-committee"
+    },
+    {
+      "parameters": {
+        "source": "dataTable",
+        "dataTableId": { "__rl": true, "value": "REPLACE_WITH_COMMITTEE_EVAL_DATA_TABLE_ID", "mode": "id" },
+        "limitRows": true,
+        "maxRows": 20
+      },
+      "id": "wf04-eval-trigger",
+      "name": "Evaluation Trigger",
+      "type": "n8n-nodes-base.evaluationTrigger",
+      "typeVersion": 4.7,
+      "position": [-1320, 390]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body=$json.body||$json;\nfor(const key of ['run_id','account_id','company','score']) if(!body[key]) throw new Error(`Missing ${key}`);\nif($vars.N8N_WEBHOOK_SECRET && $json.headers?.['x-workflow-secret']!==$vars.N8N_WEBHOOK_SECRET) throw new Error('Invalid workflow secret');\nif(!['qualified','review'].includes(body.score?.tier)) return [{json:{...body,skip_contacts:true,skip_reason:`Tier ${body.score?.tier} is not eligible`,evaluation_mode:false}}];\nreturn [{json:{...body,evaluation_mode:false}}];"
+      },
+      "id": "wf04-validate",
+      "name": "Validate Research Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1080, 40]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+          "conditions": [
+            {
+              "id": "wf04-eligible-condition",
+              "leftValue": "={{ $json.skip_contacts !== true }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "wf04-eligible",
+      "name": "Eligible for Committee?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-860, 40]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{account_id:$json.account_id,run_id:$json.run_id,status:'contacts_skipped',reason:$json.skip_reason||'Account is not eligible for contact enrichment'}}];"
+      },
+      "id": "wf04-ineligible",
+      "name": "Return Ineligible Account",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-620, -130]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/mixed_people/api_search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({q_organization_domains_list:[String($json.domain || $json.website_url || '').replace(/^https?:\\/\\//,'').replace(/^www\\./,'').split('/')[0]],person_titles:['procurement','purchasing','supply chain','research and development','new product development','culinary','operations'],person_seniorities:['owner','founder','c_suite','vp','director','manager'],page:1,per_page:12}) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "wf04-apollo-search",
+      "name": "Apollo People Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-620, 80],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput",
+      "credentials": { "httpHeaderAuth": { "id": "REPLACE_WITH_APOLLO_CREDENTIAL_ID", "name": "Apollo API Key" } },
+      "notes": "People Search identifies candidates but does not reveal email addresses."
+    },
+    {
+      "parameters": {
+        "jsCode": "const people=($json.people||[]).slice(0,8);\nconst details=people.map(person=>({id:person.id,first_name:person.first_name,last_name:person.last_name,name:person.name,linkedin_url:person.linkedin_url,organization_name:person.organization?.name,domain:$('Validate Research Result').item.json.domain}));\nreturn [{json:{...$('Validate Research Result').item.json,search_candidates:people,enrichment_details:details}}];"
+      },
+      "id": "wf04-build-enrichment",
+      "name": "Bound Apollo Candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-590, 40]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/people/bulk_match",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({details:$json.enrichment_details.slice(0,2),reveal_personal_emails:false,reveal_phone_number:false}) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "wf04-apollo-enrich",
+      "name": "Apollo Enrich Top Candidates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-350, 40],
+      "disabled": true,
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput",
+      "credentials": { "httpHeaderAuth": { "id": "REPLACE_WITH_APOLLO_CREDENTIAL_ID", "name": "Apollo API Key" } },
+      "notes": "Disabled for the free-plan demo because Apollo bulk_match requires paid API access. Enable only after paid access is confirmed. Production remains capped at two candidates with no phone or personal-email enrichment."
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx=$('Bound Apollo Candidates').item.json;\nconst enriched=$json.matches||$json.people||[];\nconst byId=new Map(enriched.map(person=>[person.id,person]));\nconst candidates=(ctx.search_candidates||[]).map(person=>{const e=byId.get(person.id)||{}; return {apollo_person_id:person.id,full_name:e.name||person.name||`${person.first_name||''} ${person.last_name||''}`.trim(),title:e.title||person.title||'',seniority:e.seniority||person.seniority||'',departments:e.departments||person.departments||[],linkedin_url:e.linkedin_url||person.linkedin_url||null,work_email:e.email_status==='verified'?e.email:null,email_status:e.email_status==='verified'?'verified':e.email?'unverified':'unavailable'};});\nconst apollo_status=!candidates.length?'no_match':enriched.length?'enriched':'search_only';\nreturn [{json:{...ctx,candidates,apollo_status}}];"
+      },
+      "id": "wf04-normalize-apollo",
+      "name": "Normalize Apollo Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-110, 40]
+    },
+    {
+      "parameters": {
+        "jsCode": "const research=typeof $json.research_json==='string'?JSON.parse($json.research_json):($json.research_json||{});\nconst candidates=typeof $json.candidates_json==='string'?JSON.parse($json.candidates_json):($json.candidates_json||[]);\nreturn [{json:{...research,run_id:$json.run_id||research.run_id,account_id:$json.account_id||research.account_id,candidates,expected_top_persona:$json.expected_top_persona,expected_count:Number($json.expected_count||3),evaluation_mode:true}}];"
+      },
+      "id": "wf04-eval-adapter",
+      "name": "Build Committee Evaluation Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-1060, 390]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{json:{...$json,candidates:($json.candidates||[]).slice(0,12),expected_top_persona:$json.expected_top_persona||null,expected_count:Number($json.expected_count||3)}}];"
+      },
+      "id": "wf04-prepare",
+      "name": "Prepare Committee Agent Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [130, 190]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Build the buying committee for one account.\nCompany research: {{ JSON.stringify({company:$json.company,segment:$json.segment,findings:$json.findings,risks:$json.risks,score:$json.score}) }}\nApollo candidates: {{ JSON.stringify($json.candidates) }}\nUse the Historical_Persona_Outcomes tool for the detected segment. Return 3–5 candidates when available, with component scores and explicit reasons.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Knoxx Buying Committee Agent. Rank people only from the supplied Apollo candidate list. Consider procurement/supply chain, R&D/NPD/culinary, operations and commercial leadership based on the detected buying problem. Use synthetic history only as a small tie-breaker and label it synthetic. Do not invent a person, title, email or Apollo ID. Work email availability affects activation, not role relevance. Return component scores from 0 to 100; the workflow calculates the final weighted score and order. Explain why each person is relevant and what role they likely play. If fewer than three credible candidates exist, return what exists and set needs_review true.",
+          "maxIterations": 5,
+          "returnIntermediateSteps": true,
+          "enableStreaming": false
+        }
+      },
+      "id": "wf04-agent",
+      "name": "Buying Committee Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [390, 190],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-5.6-terra", "mode": "id" },
+        "responsesApiEnabled": true,
+        "options": { "reasoningEffort": "medium", "temperature": 0.1, "maxRetries": 2, "timeout": 90000 }
+      },
+      "id": "wf04-model",
+      "name": "GPT 5.6 Terra Committee Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [230, 440],
+      "credentials": { "openAiApi": { "id": "REPLACE_WITH_OPENAI_CREDENTIAL_ID", "name": "OpenAI API" } }
+    },
+    {
+      "parameters": {
+        "description": "Return synthetic historical persona outcomes for a segment. These demo values are tie-breakers only.",
+        "language": "javaScript",
+        "jsCode": "const rows={ready_meals:[{persona:'procurement',weight:82},{persona:'operations',weight:70},{persona:'rd_npd_culinary',weight:77}],food_manufacturer:[{persona:'procurement',weight:80},{persona:'rd_npd_culinary',weight:84},{persona:'operations',weight:65}],restaurant_group:[{persona:'culinary',weight:85},{persona:'procurement',weight:76},{persona:'operations',weight:72}]};\nconst raw=typeof query==='string'?query:JSON.stringify(query);\nconst segment=Object.keys(rows).find(key=>raw.includes(key))||'food_manufacturer';\nreturn JSON.stringify({synthetic:true,segment,outcomes:rows[segment]});",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"segment\":{\"type\":\"string\"}},\"required\":[\"segment\"]}"
+      },
+      "id": "wf04-history-tool",
+      "name": "Historical Persona Outcomes",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [430, 440]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"required\":[\"candidates\",\"needs_review\"],\"properties\":{\"needs_review\":{\"type\":\"boolean\"},\"review_reason\":{\"type\":[\"string\",\"null\"]},\"candidates\":{\"type\":\"array\",\"minItems\":0,\"maxItems\":5,\"items\":{\"type\":\"object\",\"required\":[\"apollo_person_id\",\"full_name\",\"title\",\"persona\",\"role_relevance\",\"decision_authority\",\"pain_alignment\",\"historical_performance\",\"data_confidence\",\"reason\"],\"properties\":{\"apollo_person_id\":{\"type\":\"string\"},\"full_name\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"},\"persona\":{\"type\":\"string\",\"enum\":[\"procurement\",\"supply_chain\",\"rd_npd_culinary\",\"operations\",\"commercial_leadership\"]},\"role_relevance\":{\"type\":\"number\"},\"decision_authority\":{\"type\":\"number\"},\"pain_alignment\":{\"type\":\"number\"},\"historical_performance\":{\"type\":\"number\"},\"data_confidence\":{\"type\":\"number\"},\"reason\":{\"type\":\"string\"}}}}}}"
+      },
+      "id": "wf04-parser",
+      "name": "Committee Output Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [630, 440]
+    },
+    {
+      "parameters": {
+        "jsCode": "const context=$('Prepare Committee Agent Input').item.json;\nlet result;\ntry {const raw=$json.output??$json; result=typeof raw==='string'?JSON.parse(raw):raw;} catch {return [{json:{...context,contacts:[],committee_valid:false,validation_errors:['Invalid agent JSON'],status:'failed_partial'}}];}\nconst source=new Map((context.candidates||[]).map(c=>[String(c.apollo_person_id),c]));\nconst clamp=v=>Math.max(0,Math.min(100,Number(v)||0));\nconst errors=[];\nconst contacts=(result.candidates||[]).filter(c=>{if(!source.has(String(c.apollo_person_id))){errors.push(`Invented Apollo ID: ${c.apollo_person_id}`);return false;}return true;}).map(c=>{const original=source.get(String(c.apollo_person_id)); const components={role_relevance:clamp(c.role_relevance),decision_authority:clamp(c.decision_authority),pain_alignment:clamp(c.pain_alignment),historical_performance:clamp(c.historical_performance),data_confidence:clamp(c.data_confidence)}; const total=Math.round(components.role_relevance*.40+components.decision_authority*.25+components.pain_alignment*.20+components.historical_performance*.10+components.data_confidence*.05); return {...original,...c,...components,total,activation_eligible:original.email_status==='verified'};}).sort((a,b)=>b.total-a.total).slice(0,5).map((c,index)=>({...c,rank:index+1}));\nif(contacts.length<3) errors.push('Fewer than three credible contacts');\nif(contacts.length>5) errors.push('More than five contacts');\nreturn [{json:{...context,contacts,committee_valid:errors.length===0,validation_errors:errors,needs_review:Boolean(result.needs_review||errors.length),review_reason:result.review_reason||errors.join('; ')||null,status:errors.length?'failed_partial':'completed',intermediateSteps:$json.intermediateSteps||[]}}];"
+      },
+      "id": "wf04-guardrail",
+      "name": "Deterministic Contact Rerank",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 190]
+    },
+    {
+      "parameters": { "operation": "checkIfEvaluating" },
+      "id": "wf04-check-eval",
+      "name": "Check If Evaluating",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [940, 190]
+    },
+    {
+      "parameters": {
+        "operation": "setMetrics",
+        "metric": "correctness",
+        "expectedAnswer": "={{ JSON.stringify({top_persona:$json.expected_top_persona,count:$json.expected_count}) }}",
+        "actualAnswer": "={{ JSON.stringify({top_persona:$json.contacts[0]?.persona,count:$json.contacts.length,valid:$json.committee_valid}) }}",
+        "options": { "metricName": "Buying committee correctness" }
+      },
+      "id": "wf04-judge",
+      "name": "LLM Judge Committee",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [1190, 40]
+    },
+    {
+      "parameters": { "modelName": "models/gemini-3.6-flash", "options": { "temperature": 0 } },
+      "id": "wf04-gemini",
+      "name": "Gemini 3.6 Independent Judge",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [1170, 280],
+      "credentials": { "googlePalmApi": { "id": "REPLACE_WITH_GEMINI_CREDENTIAL_ID", "name": "Google Gemini API" } }
+    },
+    {
+      "parameters": {
+        "operation": "setMetrics",
+        "metric": "customMetrics",
+        "metrics": { "assignments": [
+          { "id": "c1", "name": "committee_valid", "value": "={{ $('Deterministic Contact Rerank').item.json.committee_valid ? 1 : 0 }}", "type": "number" },
+          { "id": "c2", "name": "top_persona_match", "value": "={{ $('Deterministic Contact Rerank').item.json.contacts[0]?.persona === $('Deterministic Contact Rerank').item.json.expected_top_persona ? 1 : 0 }}", "type": "number" },
+          { "id": "c3", "name": "count_in_range", "value": "={{ $('Deterministic Contact Rerank').item.json.contacts.length >= 3 && $('Deterministic Contact Rerank').item.json.contacts.length <= 5 ? 1 : 0 }}", "type": "number" },
+          { "id": "c4", "name": "invented_contact_rate", "value": "={{ $('Deterministic Contact Rerank').item.json.validation_errors.some(e => e.includes('Invented')) ? 1 : 0 }}", "type": "number" }
+        ] }
+      },
+      "id": "wf04-metrics",
+      "name": "Deterministic Committee Metrics",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [1430, 40]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with candidate_data as (select * from jsonb_to_recordset($3::jsonb) as c(apollo_person_id text,full_name text,title text,persona text,work_email text,email_status text,linkedin_url text,rank int,role_relevance int,decision_authority int,pain_alignment int,historical_performance int,data_confidence int,total int,reason text)), upserted as (insert into contacts(account_id,apollo_person_id,full_name,title,persona,work_email,email_status,linkedin_url,state,synthetic) select $1,c.apollo_person_id,c.full_name,c.title,c.persona,c.work_email,c.email_status,c.linkedin_url,'shortlisted',false from candidate_data c on conflict(account_id,apollo_person_id) do update set full_name=excluded.full_name,title=excluded.title,persona=excluded.persona,work_email=excluded.work_email,email_status=excluded.email_status,linkedin_url=excluded.linkedin_url,updated_at=now() returning id,apollo_person_id), ranked as (insert into contact_rankings(run_id,contact_id,rank,role_relevance,decision_authority,pain_alignment,historical_performance,data_confidence,total,reason) select $2,u.id,c.rank,c.role_relevance,c.decision_authority,c.pain_alignment,c.historical_performance,c.data_confidence,c.total,c.reason from candidate_data c join upserted u on u.apollo_person_id=c.apollo_person_id on conflict(run_id,contact_id) do update set rank=excluded.rank,role_relevance=excluded.role_relevance,decision_authority=excluded.decision_authority,pain_alignment=excluded.pain_alignment,historical_performance=excluded.historical_performance,data_confidence=excluded.data_confidence,total=excluded.total,reason=excluded.reason returning id) update accounts set stage='contacts_enriched' where id=$1 returning id as account_id,$2::uuid as run_id;",
+        "options": { "queryReplacement": "={{ [$json.account_id,$json.run_id,JSON.stringify($json.contacts)] }}" }
+      },
+      "id": "wf04-persist",
+      "name": "Persist Contacts & Rankings",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1190, 370],
+      "credentials": { "postgres": { "id": "REPLACE_WITH_SUPABASE_POSTGRES_CREDENTIAL_ID", "name": "Supabase Postgres" } },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.KNOXX_WF05_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-Workflow-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({account_id:$json.account_id,run_id:$json.run_id,research:{company:$('Deterministic Contact Rerank').item.json.company,segment:$('Deterministic Contact Rerank').item.json.segment,findings:$('Deterministic Contact Rerank').item.json.findings,ingredient_matches:$('Deterministic Contact Rerank').item.json.ingredient_matches,score:$('Deterministic Contact Rerank').item.json.score},contacts:$('Deterministic Contact Rerank').item.json.contacts}) }}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "wf04-next",
+      "name": "Start Outreach Draft Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1430, 370],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Production Webhook": { "main": [[{ "node": "Validate Research Result", "type": "main", "index": 0 }]] },
+    "Validate Research Result": { "main": [[{ "node": "Eligible for Committee?", "type": "main", "index": 0 }]] },
+    "Eligible for Committee?": { "main": [[{ "node": "Apollo People Search", "type": "main", "index": 0 }],[{ "node": "Return Ineligible Account", "type": "main", "index": 0 }]] },
+    "Apollo People Search": { "main": [[{ "node": "Bound Apollo Candidates", "type": "main", "index": 0 }]] },
+    "Bound Apollo Candidates": { "main": [[{ "node": "Apollo Enrich Top Candidates", "type": "main", "index": 0 }]] },
+    "Apollo Enrich Top Candidates": { "main": [[{ "node": "Normalize Apollo Results", "type": "main", "index": 0 }]] },
+    "Normalize Apollo Results": { "main": [[{ "node": "Prepare Committee Agent Input", "type": "main", "index": 0 }]] },
+    "Evaluation Trigger": { "main": [[{ "node": "Build Committee Evaluation Input", "type": "main", "index": 0 }]] },
+    "Build Committee Evaluation Input": { "main": [[{ "node": "Prepare Committee Agent Input", "type": "main", "index": 0 }]] },
+    "Prepare Committee Agent Input": { "main": [[{ "node": "Buying Committee Agent", "type": "main", "index": 0 }]] },
+    "GPT 5.6 Terra Committee Model": { "ai_languageModel": [[{ "node": "Buying Committee Agent", "type": "ai_languageModel", "index": 0 }]] },
+    "Historical Persona Outcomes": { "ai_tool": [[{ "node": "Buying Committee Agent", "type": "ai_tool", "index": 0 }]] },
+    "Committee Output Schema": { "ai_outputParser": [[{ "node": "Buying Committee Agent", "type": "ai_outputParser", "index": 0 }]] },
+    "Buying Committee Agent": { "main": [[{ "node": "Deterministic Contact Rerank", "type": "main", "index": 0 }]] },
+    "Deterministic Contact Rerank": { "main": [[{ "node": "Check If Evaluating", "type": "main", "index": 0 }]] },
+    "Check If Evaluating": { "main": [[{ "node": "LLM Judge Committee", "type": "main", "index": 0 }],[{ "node": "Persist Contacts & Rankings", "type": "main", "index": 0 }]] },
+    "Gemini 3.6 Independent Judge": { "ai_languageModel": [[{ "node": "LLM Judge Committee", "type": "ai_languageModel", "index": 0 }]] },
+    "LLM Judge Committee": { "main": [[{ "node": "Deterministic Committee Metrics", "type": "main", "index": 0 }]] },
+    "Persist Contacts & Rankings": { "main": [[{ "node": "Start Outreach Draft Workflow", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "Australia/Sydney", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "all", "executionTimeout": 420 },
+  "versionId": "d2b6c76f-c96e-496b-81fc-2f647f515c29",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}

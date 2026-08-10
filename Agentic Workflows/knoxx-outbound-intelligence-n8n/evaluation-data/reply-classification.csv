@@ -1,0 +1,6 @@
+case_id,subject,body,expected_event
+positive,Re: ingredient review,"Thanks, this looks relevant. Please send a sample specification and some times next week.",positive_reply
+personal-negative,Re: ingredient review,"No thanks, this is not something I handle.",negative_reply
+organization-negative,Remove our company,"Please do not contact me or anyone else at our company again.",negative_org_reply
+ooo,Automatic reply,"I am out of office until 18 August and will respond when I return.",out_of_office
+ambiguous,Re: ingredient review,"Can you remind me where you got my details?",manual_review
