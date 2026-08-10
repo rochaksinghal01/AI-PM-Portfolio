@@ -1,0 +1,44 @@
+name: Knoxx Outbound Intelligence CI
+
+on:
+  pull_request:
+    paths:
+      - "Agentic Workflows/knoxx-outbound-intelligence-n8n/**"
+      - ".github/workflows/knoxx-outbound-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Agentic Workflows/knoxx-outbound-intelligence-n8n/**"
+      - ".github/workflows/knoxx-outbound-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "Agentic Workflows/knoxx-outbound-intelligence-n8n"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: "Agentic Workflows/knoxx-outbound-intelligence-n8n/frontend/package-lock.json"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Verify workflow and backend contracts
+        run: npm test
+      - name: Validate n8n exports
+        run: npm run validate:workflows
+      - name: Type-check Supabase Edge Functions
+        run: npm run check:edge
+      - name: Test and build frontend
+        run: npm --prefix frontend test && npm --prefix frontend run build
+      - name: Audit frontend dependencies
+        run: npm --prefix frontend audit --audit-level=moderate

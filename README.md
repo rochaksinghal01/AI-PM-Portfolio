@@ -38,6 +38,10 @@ Portfolio/
 └── Vibe Coding Projects/    — No-code/low-code AI prototypes built with Replit, Bolt, Lovable
 ```
 
+### Featured build — Knoxx Outbound Intelligence
+
+[Knoxx Outbound Intelligence](./Agentic%20Workflows/knoxx-outbound-intelligence-n8n/) is an evidence-backed account research and safe outreach pipeline built with Supabase, n8n AI Agents and a Lovable-ready React interface. It resolves one company per run, extracts dishes and scale signals, matches a synthetic ingredient catalogue, calculates auditable demand ranges, ranks a buying committee, drafts approved outreach and demonstrates organization-wide stop rules. Native n8n evaluation branches and golden datasets test the nondeterministic steps before activation.
+
 ---
 
 ## Professional Experience

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Knoxx Outbound Intelligence architecture</title>
+  <desc id="desc">A sales user submits one company domain. Supabase accepts and stores the run, n8n coordinates research, qualification, buying committee, outreach and engagement, and the React application reads the resulting pipeline state.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#eef2ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#172554" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#64748b"/>
+    </marker>
+    <style>
+      .title{font:700 40px Inter,Arial,sans-serif;fill:#0f172a}.subtitle{font:400 20px Inter,Arial,sans-serif;fill:#475569}
+      .lane{font:700 15px Inter,Arial,sans-serif;letter-spacing:1.6px;fill:#64748b}.box{rx:18;filter:url(#shadow);stroke-width:2}
+      .h{font:700 18px Inter,Arial,sans-serif;fill:#0f172a}.p{font:400 14px Inter,Arial,sans-serif;fill:#475569}.small{font:600 12px Inter,Arial,sans-serif;fill:#64748b}
+      .arrow{fill:none;stroke:#64748b;stroke-width:3;marker-end:url(#arrow)}.dashed{stroke-dasharray:8 8}.chip{rx:10}
+    </style>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <text x="80" y="72" class="title">Knoxx Outbound Intelligence</text>
+  <text x="80" y="108" class="subtitle">One company per run · evidence before judgment · humans approve outreach · events stop the account</text>
+
+  <text x="80" y="174" class="lane">PRODUCT LAYER</text>
+  <rect x="80" y="200" width="210" height="112" class="box" fill="#ffffff" stroke="#c7d2fe"/>
+  <text x="105" y="238" class="h">Sales operator</text><text x="105" y="266" class="p">Domain + optional notes</text><text x="105" y="288" class="p">Review + approve drafts</text>
+  <rect x="350" y="200" width="230" height="112" class="box" fill="#ffffff" stroke="#a7f3d0"/>
+  <text x="375" y="238" class="h">React / Lovable UI</text><text x="375" y="266" class="p">Pipeline and account report</text><text x="375" y="288" class="p">Never receives service keys</text>
+  <path d="M290 256H342" class="arrow"/>
+
+  <text x="80" y="378" class="lane">CONTROL + DATA LAYER</text>
+  <rect x="350" y="404" width="230" height="132" class="box" fill="#ecfdf5" stroke="#34d399"/>
+  <text x="375" y="442" class="h">Supabase Edge</text><text x="375" y="470" class="p">Protected entry points</text><text x="375" y="492" class="p">Signed CTA + event rules</text><text x="375" y="514" class="p">Returns run_id immediately</text>
+  <rect x="650" y="404" width="250" height="132" class="box" fill="#f8fafc" stroke="#94a3b8"/>
+  <text x="675" y="442" class="h">Postgres + RLS</text><text x="675" y="470" class="p">Accounts, immutable runs</text><text x="675" y="492" class="p">Evidence, scores, contacts</text><text x="675" y="514" class="p">Messages, events, audit trail</text>
+  <path d="M465 312V396" class="arrow"/><path d="M580 470H642" class="arrow"/><path d="M650 504H588" class="arrow dashed"/>
+
+  <text x="980" y="174" class="lane">ORCHESTRATION LAYER</text>
+  <rect x="980" y="200" width="250" height="112" class="box" fill="#fff7ed" stroke="#fb923c"/>
+  <text x="1005" y="238" class="h">WF01 · Intake</text><text x="1005" y="266" class="p">Canonicalize + deduplicate</text><text x="1005" y="288" class="p">Create/reuse account + run</text>
+  <rect x="1290" y="200" width="250" height="112" class="box" fill="#f5f3ff" stroke="#a78bfa"/>
+  <text x="1315" y="238" class="h">WF02 · Fit agent</text><text x="1315" y="266" class="p">Research + ingredient map</text><text x="1315" y="288" class="p">Deterministic volume + score</text>
+  <rect x="1290" y="362" width="250" height="112" class="box" fill="#eff6ff" stroke="#60a5fa"/>
+  <text x="1315" y="400" class="h">WF04 · Committee</text><text x="1315" y="428" class="p">Search, enrich top 1–2</text><text x="1315" y="450" class="p">Explainable 3–5 ranking</text>
+  <rect x="1290" y="524" width="250" height="112" class="box" fill="#fdf2f8" stroke="#f472b6"/>
+  <text x="1315" y="562" class="h">WF05 · Outreach</text><text x="1315" y="590" class="p">Draft → human approval</text><text x="1315" y="612" class="p">Safe inbox override + Gmail</text>
+  <rect x="1290" y="686" width="250" height="112" class="box" fill="#ecfeff" stroke="#22d3ee"/>
+  <text x="1315" y="724" class="h">WF06 · Engagement</text><text x="1315" y="752" class="p">Click/reply/booking events</text><text x="1315" y="774" class="p">Idempotent account stop rules</text>
+  <path d="M580 438C760 438 810 256 972 256" class="arrow"/>
+  <path d="M1230 256H1282" class="arrow"/><path d="M1415 312V354" class="arrow"/><path d="M1415 474V516" class="arrow"/><path d="M1415 636V678" class="arrow"/>
+  <path d="M1290 742C1090 742 1040 520 908 500" class="arrow"/>
+
+  <text x="80" y="622" class="lane">BOUNDED PROVIDERS + EVALUATION</text>
+  <rect x="80" y="648" width="220" height="78" class="box" fill="#ffffff" stroke="#fdba74"/><text x="105" y="682" class="h">Firecrawl</text><text x="105" y="706" class="p">Web + PDF evidence</text>
+  <rect x="350" y="648" width="220" height="78" class="box" fill="#ffffff" stroke="#c4b5fd"/><text x="375" y="682" class="h">OpenAI agents</text><text x="375" y="706" class="p">Structured judgment only</text>
+  <rect x="620" y="648" width="220" height="78" class="box" fill="#ffffff" stroke="#93c5fd"/><text x="645" y="682" class="h">Apollo</text><text x="645" y="706" class="p">Search then enrichment</text>
+  <rect x="890" y="648" width="220" height="78" class="box" fill="#ffffff" stroke="#86efac"/><text x="915" y="682" class="h">Gmail</text><text x="915" y="706" class="p">Allowlisted demo sends</text>
+  <rect x="350" y="764" width="490" height="78" class="box" fill="#ffffff" stroke="#fbbf24"/><text x="375" y="798" class="h">Evaluation harness</text><text x="375" y="822" class="p">Frozen fixtures + deterministic metrics + independent Gemini judge</text>
+  <path d="M300 687H342" class="arrow"/><path d="M570 687H612" class="arrow"/><path d="M840 687H882" class="arrow"/>
+  <path d="M595 764V734" class="arrow dashed"/>
+
+  <rect x="980" y="826" width="560" height="42" class="chip" fill="#0f172a"/>
+  <text x="1002" y="852" style="font:600 14px Inter,Arial,sans-serif;fill:#ffffff">Target state at 1,000 domains: durable queue · bounded workers · retries · cache · DLQ · observability</text>
+</svg>

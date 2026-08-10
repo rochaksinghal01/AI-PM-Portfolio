@@ -1,0 +1,353 @@
+{
+  "name": "Knoxx — WF02 Account Intelligence & Fit Agent",
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "knoxx-evidence-research", "responseMode": "onReceived", "options": {} },
+      "id": "wf02-webhook",
+      "name": "Production Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1180, 40],
+      "webhookId": "knoxx-wf02-evidence"
+    },
+    {
+      "parameters": {
+        "source": "dataTable",
+        "dataTableId": { "__rl": true, "value": "REPLACE_WITH_ACCOUNT_EVAL_DATA_TABLE_ID", "mode": "id" },
+        "limitRows": true,
+        "maxRows": 20
+      },
+      "id": "wf02-eval-trigger",
+      "name": "Evaluation Trigger",
+      "type": "n8n-nodes-base.evaluationTrigger",
+      "typeVersion": 4.7,
+      "position": [-1180, 380]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst required = ['run_id','account_id','website_url'];\nconst missing = required.filter((key) => !body[key]);\nif (missing.length) throw new Error(`Missing required fields: ${missing.join(', ')}`);\nconst expected = $vars.N8N_WEBHOOK_SECRET;\nconst supplied = $json.headers?.['x-workflow-secret'];\nif (expected && supplied !== expected) throw new Error('Invalid workflow secret');\nreturn [{ json: { ...body, evaluation_mode: false } }];"
+      },
+      "id": "wf02-validate",
+      "name": "Validate Production Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-950, 40]
+    },
+    {
+      "parameters": {
+        "jsCode": "const evidence = typeof $json.evidence_json === 'string' ? JSON.parse($json.evidence_json) : ($json.evidence_json || {});\nreturn [{ json: { run_id: $json.run_id || `eval-${$json.row_number}`, account_id: $json.account_id || 'eval-account', website_url: $json.website_url, company_name: $json.company_name, notes: $json.notes || '', evidence, expected_tier: $json.expected_tier, expected_min_matches: Number($json.expected_min_matches || 0), evaluation_mode: true } }];"
+      },
+      "id": "wf02-eval-adapter",
+      "name": "Build Evaluation Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-950, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.firecrawl.dev/v2/crawl",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ url: $json.website_url, includePaths: ['*menu*','*product*','*catalog*','*about*','*location*','*procurement*','*sustainability*'], excludePaths: ['*privacy*','*terms*','*login*'], limit: 25, maxDiscoveryDepth: 3, scrapeOptions: { formats: ['markdown'], onlyMainContent: true, parsers: ['pdf'], timeout: 60000 } }) }}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "wf02-firecrawl",
+      "name": "Firecrawl Website & PDFs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-710, 40],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2500,
+      "onError": "continueRegularOutput",
+      "credentials": { "httpHeaderAuth": { "id": "REPLACE_WITH_FIRECRAWL_CREDENTIAL_ID", "name": "Firecrawl Bearer API Key" } },
+      "notes": "Starts an asynchronous Firecrawl crawl. Credential header must be Authorization: Bearer <FIRECRAWL_API_KEY>."
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Validate Production Input').item.json;\nconst crawlId = $json.id || $json.data?.id || null;\nconst providerError = $json.error?.message || $json.message || null;\nreturn [{json:{...input,crawl_id:crawlId,crawl_status_url:crawlId?`https://api.firecrawl.dev/v2/crawl/${crawlId}`:null,poll_attempt:0,crawl_status:crawlId?'queued':'failed',crawl_error:providerError || (crawlId?null:'Firecrawl did not return a crawl job id'),crawl_response:null}}];"
+      },
+      "id": "wf02-capture-crawl",
+      "name": "Capture Crawl Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-470, -80]
+    },
+    {
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 }, "conditions": [{ "id": "crawl-started", "leftValue": "={{ Boolean($json.crawl_id) }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }], "combinator": "and" },
+        "options": {}
+      },
+      "id": "wf02-crawl-started",
+      "name": "Crawl Started?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [-230, -80]
+    },
+    {
+      "parameters": { "resume": "specificTime", "dateTime": "={{ $now.plus({seconds:5}) }}" },
+      "id": "wf02-wait-crawl",
+      "name": "Wait Before Crawl Poll",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [10, -160],
+      "webhookId": "knoxx-wf02-crawl-wait"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.crawl_status_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": { "timeout": 30000 }
+      },
+      "id": "wf02-get-crawl",
+      "name": "Get Crawl Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, -160],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput",
+      "credentials": { "httpHeaderAuth": { "id": "REPLACE_WITH_FIRECRAWL_CREDENTIAL_ID", "name": "Firecrawl Bearer API Key" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const prior = $('Wait Before Crawl Poll').item.json;\nconst response = $json || {};\nconst attempt = Number(prior.poll_attempt || 0) + 1;\nconst providerError = response.error?.message || response.message || null;\nconst status = String(response.status || response.data?.status || (providerError ? 'failed' : 'unknown')).toLowerCase();\nconst complete = status === 'completed';\nconst terminalFailure = status === 'failed' || Boolean(providerError) || attempt >= 60;\nreturn [{json:{...prior,poll_attempt:attempt,crawl_status:status,crawl_complete:complete,crawl_terminal_failure:terminalFailure,crawl_error:providerError || (attempt>=60&&!complete?'Firecrawl polling timed out after 5 minutes':null),crawl_response:response}}];"
+      },
+      "id": "wf02-assess-crawl",
+      "name": "Assess Crawl Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [490, -160]
+    },
+    {
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 }, "conditions": [{ "id": "crawl-complete", "leftValue": "={{ $json.crawl_complete }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }], "combinator": "and" },
+        "options": {}
+      },
+      "id": "wf02-crawl-complete",
+      "name": "Crawl Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [730, -160]
+    },
+    {
+      "parameters": {
+        "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 }, "conditions": [{ "id": "crawl-terminal", "leftValue": "={{ $json.crawl_terminal_failure }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true", "singleValue": true } }], "combinator": "and" },
+        "options": {}
+      },
+      "id": "wf02-crawl-terminal",
+      "name": "Crawl Failed or Timed Out?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [970, -40]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $json.crawl_response || $json || {};\nconst pages = Array.isArray(response.data) ? response.data : Array.isArray(response.data?.data) ? response.data.data : [];\nconst compact = pages.slice(0,25).map((page, index) => ({ source_key: `src_${index+1}`, url: page.metadata?.sourceURL || page.metadata?.url || page.url, title: page.metadata?.title || `Source ${index+1}`, source_type: String(page.metadata?.sourceURL || page.metadata?.url || page.url || '').toLowerCase().endsWith('.pdf') ? 'pdf' : 'web', markdown: String(page.markdown || page.content || '').slice(0,18000), retrieved_at: new Date().toISOString() }));\nconst partial = Boolean($json.crawl_error || $json.crawl_terminal_failure || response.next || !pages.length);\nreturn [{ json: { ...$('Validate Production Input').item.json, evidence: { pages: compact, crawl_id: $json.crawl_id || null, crawl_status: $json.crawl_status || response.status || 'failed', crawl_partial: partial, crawl_error: $json.crawl_error || response.error?.message || null, pages_attempted: Number(response.total || pages.length), pages_completed: Number(response.completed || pages.length) } } }];"
+      },
+      "id": "wf02-normalize-evidence",
+      "name": "Normalize & Bound Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1210, -160]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = { ...$json };\ninput.evidence = input.evidence || { pages: [], crawl_partial: true, crawl_error: 'No evidence supplied' };\ninput.expected_tier = input.expected_tier ?? null;\ninput.expected_min_matches = Number(input.expected_min_matches || 0);\nreturn [{ json: input }];"
+      },
+      "id": "wf02-prepare-agent-input",
+      "name": "Prepare Agent Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-300, 180]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Research and qualify exactly one target account for a potential Knoxx ingredient-supply opportunity.\n\nTarget company supplied by user: {{ $json.company_name || '(resolve from evidence)' }}\nWebsite: {{ $json.website_url }}\nSales notes and constraints: {{ $json.notes || '(none supplied)' }}\nCrawl status: {{ $json.evidence.crawl_partial ? 'partial' : 'complete' }}\nCrawl error: {{ $json.evidence.crawl_error || '(none)' }}\nEvidence pages: {{ JSON.stringify($json.evidence.pages) }}\n\nFollow the system research procedure. Call Knoxx_Catalogue_Lookup separately for each canonical ingredient that may map to the portfolio. Return only the structured object required by the output parser. Do not include prose outside that object.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are the Knoxx Account Intelligence & Ingredient Opportunity Agent. You analyse one company for a food-ingredient supplier. Your output helps a sales person decide whether the account deserves manual review; you do not find contacts, draft outreach, approve outreach or send messages.\n\nSOURCE BOUNDARY\nUse only the supplied evidence pages, sales notes and results returned by Knoxx_Catalogue_Lookup. Do not use general memory to fill gaps. A source_key is valid only when it appears in the supplied evidence. Never invent a company fact, parent, location, dish, ingredient, volume, pain, catalogue SKU or source. If evidence is absent, return an empty array, null, unknown/other_review, or a clearly stated limitation. Partial crawl results reduce confidence; they do not justify fabrication.\n\nEVIDENCE LABELS\n- observed: stated directly or clearly displayed in a cited source.\n- inferred: a narrow conclusion logically supported by one or more cited observations; state the reasoning.\n- hypothesis: a commercially useful possibility that sales must validate; state the evidence signal that motivated it.\nEvery finding must include label, text, evidence_strength, confidence (high, medium or low), and one or more valid source_keys. Directly observed company statements may be observations. Operational or commercial pain is normally a hypothesis unless the company explicitly states the problem.\n\nRESEARCH PROCEDURE — COMPLETE IN THIS ORDER\n1. Resolve identity: determine the company name, canonical business, and parent only when cited evidence supports it. Note brand-versus-parent ambiguity as a risk.\n2. Classify the segment using the allowed enum. Choose other_review when the evidence is insufficient or the company spans incompatible segments.\n3. Establish operating footprint: extract cited production/service locations, markets served and procurement-relevant geography. Do not equate customer delivery coverage with supplier receiving capability. If Knoxx service coverage is not supplied in the sales notes, mark supply feasibility as unverified.\n4. Establish scale: collect concrete signals such as stated meals produced, facilities, sites, employees, customers, product range or distribution footprint. Keep the original unit and period. Do not convert vague words such as large or leading into a numerical volume.\n5. Extract dishes/products: include only named dishes or manufactured products visible in evidence. For each, list ingredients only when explicitly stated or when the ingredient is an obvious recipe inference; make that distinction in findings. Never present a guessed complete recipe as observed.\n6. Build ingredient opportunities: canonicalise ingredient names, remove duplicates, and prioritise at most five evidence-supported ingredients with the strongest likely portfolio relevance. Call Knoxx_Catalogue_Lookup once for each shortlisted ingredient. A match may use only a SKU returned by the tool. Score exact ingredient/form matches higher than category or substitution matches, explain any formulation mismatch, and reject empty tool results.\n7. Assess quantity inputs per matched ingredient. The deterministic workflow calculates demand as meals_annual × applicable_share × kg_per_meal. Provide meals_annual only from a cited production figure or a transparent documented assumption; applicable_share must be between 0 and 1 and tied to the share of relevant meals/products; kg_per_meal must be kilograms per serving or unit and supported by evidence or an explicitly labelled assumption. Put the assumption and its basis in the match/finding. If any input lacks support, set that input to null so the forecast becomes insufficient_evidence. Never calculate or claim a final weekly, monthly or annual demand yourself.\n8. Form pain/value hypotheses only where a cited operating signal creates a plausible Knoxx-relevant issue. Examples may include ingredient consistency, preparation labour, supply resilience, standardisation, yield or geographic supply complexity, but do not add them merely because they are common in the industry. State what sales must ask to validate each hypothesis. Do not claim savings, speed, quality or reliability without approved evidence.\n9. Identify risks and disqualifiers: parent or vertical integration, geography mismatch, incompatible specifications/certifications, low likely volume, weak evidence, uncertain recipe applicability, or catalogue mismatch. Each material risk must state its evidence or the missing information that creates the uncertainty.\n10. Recommend score components, not the final decision: product_applicability 0–40, evidence_specificity 0–25, scale_fit 0–20, supply_feasibility 0–15, and risk_penalty 0 to -30. Base these values only on the completed analysis. Missing evidence must not receive positive points. The deterministic workflow clamps, totals and assigns qualified/review/disqualified.\n\nOUTPUT QUALITY CHECK\nBefore returning, verify that every finding source_key exists, every dish has at least one valid source_key, every catalogue SKU came from a tool result, match_score is 0–100, confidence is calibrated, quantity units are correct, unsupported quantity inputs are null, and risks include all meaningful uncertainty. Prefer a smaller defensible result over a detailed speculative one. Return only the schema-valid structured object.",
+          "maxIterations": 8,
+          "returnIntermediateSteps": true,
+          "enableStreaming": false
+        }
+      },
+      "id": "wf02-agent",
+      "name": "Account Intelligence Fit Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [-130, 180],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "model": { "__rl": true, "value": "gpt-5.6-terra", "mode": "id" },
+        "responsesApiEnabled": true,
+        "options": { "reasoningEffort": "medium", "temperature": 0.1, "maxRetries": 2, "timeout": 120000 }
+      },
+      "id": "wf02-openai-model",
+      "name": "GPT 5.6 Terra Research Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [-290, 430],
+      "credentials": { "openAiApi": { "id": "REPLACE_WITH_OPENAI_CREDENTIAL_ID", "name": "OpenAI API" } }
+    },
+    {
+      "parameters": {
+        "description": "Look up approved synthetic Knoxx catalogue candidates for one canonical ingredient. Use this before proposing a product match.",
+        "language": "javaScript",
+        "jsCode": "const catalog = [\n {sku:'DEMO-TOM-001',name:'Processed tomato pulp — aseptic',category:'Processed tomatoes',terms:['tomato','tomato pulp','tomato base','tomato puree','crushed tomato']},\n {sku:'DEMO-RIC-001',name:'Food-service long-grain rice',category:'Rice',terms:['rice','jasmine rice','long-grain rice','basmati rice']},\n {sku:'DEMO-VEG-001',name:'Dehydrated onion flakes',category:'Dehydrated vegetables',terms:['onion','onion flakes','dried onion']},\n {sku:'DEMO-VEG-002',name:'Dehydrated garlic granules',category:'Dehydrated vegetables',terms:['garlic','garlic granules','dried garlic']},\n {sku:'DEMO-PAS-001',name:'Italian penne rigate',category:'Italian pasta',terms:['pasta','penne','penne rigate']},\n {sku:'DEMO-SEA-001',name:'Bulk curry seasoning blend',category:'Starches and seasonings',terms:['seasoning','spice','curry']}\n];\nconst raw = typeof query === 'string' ? query : JSON.stringify(query);\nconst q = raw.toLowerCase();\nreturn JSON.stringify(catalog.filter(item => item.terms.some(term => q.includes(term))).slice(0,5));",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"properties\":{\"ingredient\":{\"type\":\"string\"}},\"required\":[\"ingredient\"]}"
+      },
+      "id": "wf02-catalog-tool",
+      "name": "Knoxx Catalogue Lookup",
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [-90, 430]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\"type\":\"object\",\"required\":[\"company\",\"segment\",\"dishes\",\"findings\",\"ingredient_matches\",\"score_inputs\",\"risks\"],\"properties\":{\"company\":{\"type\":\"object\",\"required\":[\"name\",\"parent_company\",\"locations\",\"service_area\",\"scale_signals\"],\"properties\":{\"name\":{\"type\":\"string\"},\"parent_company\":{\"type\":[\"string\",\"null\"]},\"locations\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"service_area\":{\"type\":\"object\"},\"scale_signals\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}}}},\"segment\":{\"type\":\"string\",\"enum\":[\"ready_meals\",\"food_manufacturer\",\"airline_catering\",\"institutional_catering\",\"restaurant_group\",\"sauces_condiments\",\"other_review\"]},\"dishes\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"name\",\"ingredients\",\"source_keys\"],\"properties\":{\"name\":{\"type\":\"string\"},\"ingredients\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"source_keys\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}}}},\"findings\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"label\",\"text\",\"evidence_strength\",\"confidence\",\"source_keys\"]}},\"ingredient_matches\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"ingredient\",\"catalog_sku\",\"match_score\",\"confidence\",\"quantity_inputs\",\"source_keys\"]}},\"score_inputs\":{\"type\":\"object\",\"required\":[\"product_applicability\",\"evidence_specificity\",\"scale_fit\",\"supply_feasibility\",\"risk_penalty\"]},\"risks\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}}}}"
+      },
+      "id": "wf02-parser",
+      "name": "Account Research Output Schema",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [100, 430]
+    },
+    {
+      "parameters": {
+        "jsCode": "const context = $('Prepare Agent Input').item.json;\nconst raw = $json.output ?? $json;\nlet result;\ntry { result = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (error) { return [{ json: { ...context, agent_valid: false, validation_errors: ['Agent output was not valid JSON'], status: 'failed_partial' } }]; }\nconst problems = [];\nconst evidencePages = context.evidence?.pages || [];\nif (!evidencePages.length) problems.push('No research evidence pages were available');\nfor (const finding of result.findings || []) {\n  if (!['observed','inferred','hypothesis'].includes(finding.evidence_strength)) problems.push(`Invalid evidence strength: ${finding.label}`);\n  if (!(finding.source_keys || []).length) problems.push(`Finding lacks source: ${finding.label}`);\n}\nconst allowedSources = new Set(evidencePages.map(page => page.source_key));\nfor (const finding of result.findings || []) {\n  for (const key of finding.source_keys || []) if (!allowedSources.has(key)) problems.push(`Unknown source key ${key}: ${finding.label}`);\n}\nconst clamp=(value,max)=>Math.max(0,Math.min(max,Number(value)||0));\nconst s=result.score_inputs||{};\nconst parts={product_applicability:clamp(s.product_applicability,40),evidence_specificity:clamp(s.evidence_specificity,25),scale_fit:clamp(s.scale_fit,20),supply_feasibility:clamp(s.supply_feasibility,15),risk_penalty:Math.max(-30,Math.min(0,Number(s.risk_penalty)||0))};\nif (!evidencePages.length) Object.assign(parts,{product_applicability:0,evidence_specificity:0,scale_fit:0,supply_feasibility:0,risk_penalty:-30});\nparts.total=Math.max(0,Math.min(100,parts.product_applicability+parts.evidence_specificity+parts.scale_fit+parts.supply_feasibility+parts.risk_penalty));\nparts.tier=parts.total>=75?'qualified':parts.total>=55?'review':'disqualified';\nconst range=(m,a,k)=>{if(![m,a,k].every(v=>Number(v)>0)) return {status:'insufficient_evidence'}; const annual=Number(m)*Number(a)*Number(k); const p=v=>({weekly:Math.round(v/52),monthly:Math.round(v/12),annual:Math.round(v)}); return {status:'estimated',low:p(annual*.75),base:p(annual),high:p(annual*1.25)};};\nresult.ingredient_matches=(result.ingredient_matches||[]).map(match=>({...match,forecast:range(match.quantity_inputs?.meals_annual,match.quantity_inputs?.applicable_share,match.quantity_inputs?.kg_per_meal)}));\nreturn [{json:{...context,...result,score:parts,agent_valid:problems.length===0,validation_errors:[...new Set(problems)],status:problems.length?'failed_partial':'completed',intermediateSteps:$json.intermediateSteps||[]}}];"
+      },
+      "id": "wf02-guardrail",
+      "name": "Deterministic Guardrail Score & Forecast",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [190, 180]
+    },
+    {
+      "parameters": { "operation": "checkIfEvaluating" },
+      "id": "wf02-check-eval",
+      "name": "Check If Evaluating",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [430, 180]
+    },
+    {
+      "parameters": {
+        "operation": "setMetrics",
+        "metric": "correctness",
+        "expectedAnswer": "={{ JSON.stringify({ tier: $json.expected_tier, min_matches: $json.expected_min_matches }) }}",
+        "actualAnswer": "={{ JSON.stringify({ tier: $json.score.tier, match_count: $json.ingredient_matches.length, valid: $json.agent_valid }) }}",
+        "options": { "metricName": "Account research correctness" }
+      },
+      "id": "wf02-eval-correctness",
+      "name": "LLM Judge Correctness",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [690, 40]
+    },
+    {
+      "parameters": { "modelName": "models/gemini-3.6-flash", "options": { "temperature": 0 } },
+      "id": "wf02-gemini-judge",
+      "name": "Gemini 3.6 Independent Judge",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [690, 260],
+      "credentials": { "googlePalmApi": { "id": "REPLACE_WITH_GEMINI_CREDENTIAL_ID", "name": "Google Gemini API" } }
+    },
+    {
+      "parameters": {
+        "operation": "setMetrics",
+        "metric": "customMetrics",
+        "metrics": { "assignments": [
+          { "id": "m1", "name": "schema_valid", "value": "={{ $('Deterministic Guardrail Score & Forecast').item.json.agent_valid ? 1 : 0 }}", "type": "number" },
+          { "id": "m2", "name": "source_coverage", "value": "={{ (() => { const findings = $('Deterministic Guardrail Score & Forecast').item.json.findings || []; return findings.length ? findings.filter(f => Array.isArray(f.source_keys) && f.source_keys.length > 0).length / findings.length : 0; })() }}", "type": "number" },
+          { "id": "m3", "name": "tier_match", "value": "={{ $('Deterministic Guardrail Score & Forecast').item.json.score?.tier === $('Deterministic Guardrail Score & Forecast').item.json.expected_tier ? 1 : 0 }}", "type": "number" }
+        ] }
+      },
+      "id": "wf02-custom-metrics",
+      "name": "Deterministic Research Metrics",
+      "type": "n8n-nodes-base.evaluation",
+      "typeVersion": 4.8,
+      "position": [930, 40]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "update research_runs set status=$1, completed_at=now(), provider_versions=provider_versions || $2::jsonb, error_summary=$3 where id=$4; update accounts set name=coalesce(name,$5), parent_company=$6, stage=$7 where id=$8; insert into account_scores (run_id,product_applicability,evidence_specificity,scale_fit,supply_feasibility,risk_penalty,total,tier,reasons,rule_version) values ($4,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,1) on conflict (run_id) do update set product_applicability=excluded.product_applicability,evidence_specificity=excluded.evidence_specificity,scale_fit=excluded.scale_fit,supply_feasibility=excluded.supply_feasibility,risk_penalty=excluded.risk_penalty,total=excluded.total,tier=excluded.tier,reasons=excluded.reasons;",
+        "options": { "queryReplacement": "={{ [$json.status, JSON.stringify({account_agent:'gpt-5.6-terra',evaluator:'gemini-3.6-flash'}), $json.validation_errors.join('; ') || null, $json.run_id, $json.company.name, $json.company.parent_company, $json.score.tier, $json.account_id, $json.score.product_applicability, $json.score.evidence_specificity, $json.score.scale_fit, $json.score.supply_feasibility, $json.score.risk_penalty, $json.score.total, $json.score.tier, JSON.stringify($json.risks)] }}" }
+      },
+      "id": "wf02-persist",
+      "name": "Persist Research & Score",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [690, 350],
+      "credentials": { "postgres": { "id": "REPLACE_WITH_SUPABASE_POSTGRES_CREDENTIAL_ID", "name": "Supabase Postgres" } },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $vars.KNOXX_WF04_WEBHOOK_URL }}",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-Workflow-Secret", "value": "={{ $vars.N8N_WEBHOOK_SECRET }}" }] },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "wf02-next",
+      "name": "Start Buying Committee Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [930, 350],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Production Webhook": { "main": [[{ "node": "Validate Production Input", "type": "main", "index": 0 }]] },
+    "Validate Production Input": { "main": [[{ "node": "Firecrawl Website & PDFs", "type": "main", "index": 0 }]] },
+    "Firecrawl Website & PDFs": { "main": [[{ "node": "Capture Crawl Job", "type": "main", "index": 0 }]] },
+    "Capture Crawl Job": { "main": [[{ "node": "Crawl Started?", "type": "main", "index": 0 }]] },
+    "Crawl Started?": { "main": [[{ "node": "Wait Before Crawl Poll", "type": "main", "index": 0 }],[{ "node": "Normalize & Bound Evidence", "type": "main", "index": 0 }]] },
+    "Wait Before Crawl Poll": { "main": [[{ "node": "Get Crawl Status", "type": "main", "index": 0 }]] },
+    "Get Crawl Status": { "main": [[{ "node": "Assess Crawl Status", "type": "main", "index": 0 }]] },
+    "Assess Crawl Status": { "main": [[{ "node": "Crawl Complete?", "type": "main", "index": 0 }]] },
+    "Crawl Complete?": { "main": [[{ "node": "Normalize & Bound Evidence", "type": "main", "index": 0 }],[{ "node": "Crawl Failed or Timed Out?", "type": "main", "index": 0 }]] },
+    "Crawl Failed or Timed Out?": { "main": [[{ "node": "Normalize & Bound Evidence", "type": "main", "index": 0 }],[{ "node": "Wait Before Crawl Poll", "type": "main", "index": 0 }]] },
+    "Normalize & Bound Evidence": { "main": [[{ "node": "Prepare Agent Input", "type": "main", "index": 0 }]] },
+    "Evaluation Trigger": { "main": [[{ "node": "Build Evaluation Evidence", "type": "main", "index": 0 }]] },
+    "Build Evaluation Evidence": { "main": [[{ "node": "Prepare Agent Input", "type": "main", "index": 0 }]] },
+    "Prepare Agent Input": { "main": [[{ "node": "Account Intelligence Fit Agent", "type": "main", "index": 0 }]] },
+    "GPT 5.6 Terra Research Model": { "ai_languageModel": [[{ "node": "Account Intelligence Fit Agent", "type": "ai_languageModel", "index": 0 }]] },
+    "Knoxx Catalogue Lookup": { "ai_tool": [[{ "node": "Account Intelligence Fit Agent", "type": "ai_tool", "index": 0 }]] },
+    "Account Research Output Schema": { "ai_outputParser": [[{ "node": "Account Intelligence Fit Agent", "type": "ai_outputParser", "index": 0 }]] },
+    "Account Intelligence Fit Agent": { "main": [[{ "node": "Deterministic Guardrail Score & Forecast", "type": "main", "index": 0 }]] },
+    "Deterministic Guardrail Score & Forecast": { "main": [[{ "node": "Check If Evaluating", "type": "main", "index": 0 }]] },
+    "Check If Evaluating": { "main": [[{ "node": "LLM Judge Correctness", "type": "main", "index": 0 }],[{ "node": "Persist Research & Score", "type": "main", "index": 0 }]] },
+    "Gemini 3.6 Independent Judge": { "ai_languageModel": [[{ "node": "LLM Judge Correctness", "type": "ai_languageModel", "index": 0 }]] },
+    "LLM Judge Correctness": { "main": [[{ "node": "Deterministic Research Metrics", "type": "main", "index": 0 }]] },
+    "Persist Research & Score": { "main": [[{ "node": "Start Buying Committee Workflow", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": { "executionOrder": "v1", "timezone": "Australia/Sydney", "saveDataErrorExecution": "all", "saveDataSuccessExecution": "all", "executionTimeout": 600 },
+  "versionId": "17b8db9e-819e-4bba-8a23-c333005f0a02",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}
