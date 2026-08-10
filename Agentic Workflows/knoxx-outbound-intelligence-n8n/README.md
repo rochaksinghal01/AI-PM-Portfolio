@@ -66,13 +66,16 @@ Live frontend: [knoxx-insight-quest.lovable.app](https://knoxx-insight-quest.lov
 ## Repository map
 
 ```text
-frontend/              React portfolio app and deterministic engine tests
+app/                   Live Lovable/TanStack frontend connected to Supabase
+frontend/              Lightweight offline demo and deterministic engine tests
 supabase/migrations/   Postgres schema, indexes, RLS and functions
 supabase/functions/    Protected runtime interfaces and tracked CTA
 n8n-workflows/         Importable workflow JSON exports
 evaluation-data/       Golden cases for native n8n Evaluations
 docs/                  Miro-ready architecture and demo material
 ```
+
+`app/` is imported from the Lovable deployment repository so this directory is a complete, single-repository handoff. The original frontend repository remains connected to Lovable for deployment sync.
 
 ## Local frontend
 

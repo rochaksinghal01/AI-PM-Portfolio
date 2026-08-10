@@ -26,12 +26,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: "Agentic Workflows/knoxx-outbound-intelligence-n8n/frontend/package-lock.json"
+          cache-dependency-path: |
+            Agentic Workflows/knoxx-outbound-intelligence-n8n/frontend/package-lock.json
+            Agentic Workflows/knoxx-outbound-intelligence-n8n/app/package-lock.json
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
       - name: Install frontend dependencies
-        run: npm --prefix frontend ci
+        run: |
+          npm --prefix frontend ci
+          npm --prefix app ci
       - name: Verify workflow and backend contracts
         run: npm test
       - name: Validate n8n exports
@@ -40,5 +44,7 @@ jobs:
         run: npm run check:edge
       - name: Test and build frontend
         run: npm --prefix frontend test && npm --prefix frontend run build
+      - name: Type-check, lint and build live app
+        run: npm --prefix app exec tsc -- --noEmit && npm --prefix app run lint && npm --prefix app run build
       - name: Audit frontend dependencies
         run: npm --prefix frontend audit --audit-level=moderate
